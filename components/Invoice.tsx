@@ -172,7 +172,7 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
         <div className="invoice-container shadow-md mx-auto bg-white" ref={invoiceRef}>
             <div className="invoice-header">
                 <div className="flex items-center gap-4">
-                    <Logo className="h-12" showTagline={false} />
+                    <Logo className="h-5" showTagline={false} />
                     <div className="brand-details">
                         <p><strong>Email:</strong> ekoprints256@gmail.com</p>
                         <p><strong>Tel:</strong> 0792832056 / 0703580516</p>

@@ -111,6 +111,11 @@ export const BeakerIcon = ({ className }: { className?: string }) => (
 );
 export const BanknotesIcon = ({ className }: { className?: string }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5h16.5m-18 4.5h18m-18 4.5h13.5m-13.5 4.5h16.5M2.25 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H3a.75.75 0 01-.75-.75V5.25zm3 3h10.5a.75.75 0 01.75.75v6a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-6a.75.75 0 01.75-.75z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5h16.5m-18 4.5h18m-18 4.5h13.5m-13.5 4.5h16.5M2.25 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H3a.75.75 0 01-.75-.75V5.25zm3 3h10.5a.75.75 0 01.75v6a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-6a.75.75 0 01.75-.75z" />
+  </svg>
+);
+export const CalendarIcon = ({ className }: { className?: string }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
   </svg>
 );

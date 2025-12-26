@@ -186,7 +186,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
   const handleSaveUsage = async () => {
     if (!saleForUsage) return;
     let processedCount = 0;
-    for (const [index, entry] of Object.entries(usageEntries)) {
+    // Fix: Explicitly type entries to avoid 'unknown' property access errors
+    const entries = Object.entries(usageEntries) as [string, { skuId: string, meters: number }][];
+    for (const [index, entry] of entries) {
         if (entry.skuId && entry.meters > 0) {
             const item = saleForUsage.items[parseInt(index)];
             await onStockOut(entry.skuId, entry.meters, `Invoice #${saleForUsage.id.substring(0,8)}`, `Usage for ${item.name}`);

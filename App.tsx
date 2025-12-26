@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -44,6 +45,7 @@ const App: React.FC = () => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
+    const [quoteNarration, setQuoteNarration] = useState('');
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
     const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -261,7 +263,7 @@ const App: React.FC = () => {
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView 
-                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} clearQuote={() => setQuoteForSale([])}
+                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); }}
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
@@ -270,7 +272,7 @@ const App: React.FC = () => {
                         {activeView === 'Calculator' && (
                             <CalculatorView 
                                 stockItems={stockItems} pricingTiers={pricingTiers} inventory={inventory} materialCategories={materialCategories} productCategories={productCategories}
-                                onCreateSale={(items) => { setQuoteForSale(items); setActiveView('Sales'); }}
+                                onCreateSale={(items, narration) => { setQuoteForSale(items); setQuoteNarration(narration); setActiveView('Sales'); }}
                             />
                         )}
                         {activeView === 'Inventory' && (
@@ -324,7 +326,7 @@ const App: React.FC = () => {
                                 onDeleteCustomer={(id) => deleteDocument('customers', id, setCustomers, 'Customer deleted.')}
                             />
                         )}
-                        {activeView === 'Reports' && <ReportsView sales={sales} expenses={expenses} inventory={inventory} stockItems={stockItems} currentUser={currentUser}/>}
+                        {activeView === 'Reports' && <ReportsView sales={sales} expenses={expenses} inventory={inventory} stockItems={stockItems} materialCategories={materialCategories} currentUser={currentUser}/>}
                         {activeView === 'Users' && currentUser.role === 'admin' && (
                             <UserManagementView users={users} currentUser={currentUser} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} />
                         )}

@@ -15,6 +15,7 @@ interface SalesViewProps {
   currentUser: User;
   users: User[];
   quoteForSale: SaleItem[];
+  quoteNarration?: string;
   clearQuote: () => void;
   onAddSale: (saleData: Omit<Sale, 'id'>) => Promise<void>;
   onDeleteSale: (sale: Sale) => Promise<void>;
@@ -30,9 +31,6 @@ const formatUGX = (amount: number) => {
     return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' UGX';
 };
 
-/**
- * Custom Searchable Select for Customers with "Add New" feature
- */
 const SearchableCustomerSelect: React.FC<{
     customers: Customer[];
     value: string;
@@ -42,11 +40,8 @@ const SearchableCustomerSelect: React.FC<{
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [isCreating, setIsCreating] = useState(false);
-    
-    // Quick Add optional fields
     const [quickPhone, setQuickPhone] = useState('');
     const [quickAddress, setQuickAddress] = useState('');
-    
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -81,29 +76,29 @@ const SearchableCustomerSelect: React.FC<{
         setIsOpen(false);
     };
 
-    const inputStyle = "w-full px-3 py-2 text-xs text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-yellow-400 bg-white placeholder-gray-300 font-bold";
+    const inputStyle = "w-full px-4 py-3 text-sm text-black border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-yellow-400 bg-white placeholder-gray-300 font-bold";
 
     return (
         <div className="relative" ref={wrapperRef}>
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between w-full p-3 border border-gray-200 rounded-xl bg-white text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all shadow-sm"
+                className="flex items-center justify-between w-full p-4 border border-gray-200 rounded-2xl bg-white text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all shadow-sm"
             >
                 <span className="truncate">
-                    {selectedCustomer ? selectedCustomer.name : "Select Customer..."}
+                    {selectedCustomer ? selectedCustomer.name : "Assign to Customer..."}
                 </span>
-                <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                <ChevronDownIcon className="w-6 h-6 text-gray-400" />
             </button>
 
             {isOpen && (
-                <div className="absolute z-[100] w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-                    <div className="p-3 bg-gray-50 border-b border-gray-100">
+                <div className="absolute z-[100] w-full mt-2 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
+                    <div className="p-4 bg-gray-50 border-b border-gray-100">
                         <div className="relative">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                                 type="text"
-                                className="w-full pl-10 pr-4 py-2 text-sm text-black border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white"
+                                className="w-full pl-12 pr-4 py-3 text-sm text-black border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white shadow-inner"
                                 placeholder="Search by name or phone..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -111,7 +106,7 @@ const SearchableCustomerSelect: React.FC<{
                             />
                         </div>
                     </div>
-                    <ul className="max-h-60 overflow-auto py-2 scrollbar-thin">
+                    <ul className="max-h-64 overflow-auto py-2 scrollbar-thin">
                         {filtered.length > 0 ? (
                             filtered.map(c => (
                                 <li
@@ -121,51 +116,37 @@ const SearchableCustomerSelect: React.FC<{
                                         setIsOpen(false);
                                         setSearch('');
                                     }}
-                                    className="px-4 py-3 text-sm text-black hover:bg-yellow-50 cursor-pointer flex flex-col"
+                                    className="px-6 py-4 text-sm text-black hover:bg-yellow-50 cursor-pointer flex flex-col border-b border-gray-50 last:border-0"
                                 >
-                                    <span className="font-bold">{c.name}</span>
-                                    {c.phone && <span className="text-[10px] text-gray-400 uppercase font-bold">{c.phone}</span>}
+                                    <span className="font-bold text-gray-900">{c.name}</span>
+                                    {c.phone && <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-0.5">{c.phone}</span>}
                                 </li>
                             ))
                         ) : search ? (
-                            <li className="p-4 space-y-3 bg-gray-50/50">
+                            <li className="p-6 space-y-4 bg-gray-50/50">
                                 <div className="text-center">
-                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3">Customer Not Found</p>
+                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-4">Customer Registry Gap</p>
                                 </div>
-                                
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     <div>
-                                        <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Phone (Optional)</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="e.g. 0700 000 000" 
-                                            value={quickPhone} 
-                                            onChange={e => setQuickPhone(e.target.value)}
-                                            className={inputStyle}
-                                        />
+                                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2 mb-1 block">Phone Contact</label>
+                                        <input type="text" placeholder="e.g. 0700 000 000" value={quickPhone} onChange={e => setQuickPhone(e.target.value)} className={inputStyle} />
                                     </div>
                                     <div>
-                                        <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Address (Optional)</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="e.g. Kampala, Uganda" 
-                                            value={quickAddress} 
-                                            onChange={e => setQuickAddress(e.target.value)}
-                                            className={inputStyle}
-                                        />
+                                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2 mb-1 block">Work/Home Address</label>
+                                        <input type="text" placeholder="e.g. Masaka City" value={quickAddress} onChange={e => setQuickAddress(e.target.value)} className={inputStyle} />
                                     </div>
                                 </div>
-
                                 <button
                                     onClick={handleCreateNew}
                                     disabled={isCreating}
-                                    className="w-full bg-yellow-400 text-gray-900 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-md active:scale-95"
+                                    className="w-full bg-yellow-400 text-gray-900 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-xl active:scale-95 border border-yellow-500/10"
                                 >
-                                    {isCreating ? 'Registering...' : `Register "${search}" as New`}
+                                    {isCreating ? 'Authenticating...' : `Enroll "${search}" as New`}
                                 </button>
                             </li>
                         ) : (
-                            <li className="px-4 py-8 text-center text-xs text-gray-400 font-bold uppercase tracking-widest">Type to start searching</li>
+                            <li className="px-6 py-12 text-center text-xs text-gray-300 font-black uppercase tracking-[0.3em]">No results found</li>
                         )}
                     </ul>
                 </div>
@@ -199,8 +180,7 @@ const SearchableMaterialSelect: React.FC<{
         const s = search.toLowerCase();
         return sorted.filter(i => 
             i.itemName.toLowerCase().includes(s) || 
-            String(i.width).includes(s) || 
-            String(i.width * 100).includes(s)
+            String(i.width).includes(s)
         );
     }, [items, search]);
 
@@ -211,30 +191,30 @@ const SearchableMaterialSelect: React.FC<{
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between w-full px-3 py-2 text-sm text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-black"
+                className="flex items-center justify-between w-full px-4 py-3 text-sm text-left bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-yellow-400 text-black font-bold"
             >
                 <span className="truncate">
-                    {selectedItem ? `${selectedItem.width}m | ${selectedItem.itemName}` : "Select Material Roll..."}
+                    {selectedItem ? `${selectedItem.width}m | ${selectedItem.itemName}` : "Select Source Roll..."}
                 </span>
-                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                <ChevronDownIcon className="w-5 h-5 text-gray-400" />
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
-                    <div className="sticky top-0 p-2 bg-white border-b border-gray-100">
+                <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                    <div className="p-3 bg-gray-50 border-b border-gray-100">
                         <div className="relative">
-                            <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                className="w-full pl-8 pr-2 py-1.5 text-xs text-black border border-gray-200 rounded focus:outline-none focus:border-purple-500"
-                                placeholder="Search width..."
+                                className="w-full pl-10 pr-3 py-2 text-xs text-black border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                                placeholder="Search dimensions..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 autoFocus
                             />
                         </div>
                     </div>
-                    <ul className="max-h-60 overflow-auto py-1">
+                    <ul className="max-h-60 overflow-auto py-1 scrollbar-thin">
                         {filtered.length > 0 ? (
                             filtered.map(i => (
                                 <li
@@ -244,14 +224,14 @@ const SearchableMaterialSelect: React.FC<{
                                         setIsOpen(false);
                                         setSearch('');
                                     }}
-                                    className="px-3 py-2 text-xs text-black hover:bg-purple-50 cursor-pointer flex justify-between"
+                                    className="px-5 py-3 text-xs text-black hover:bg-yellow-50 cursor-pointer flex justify-between items-center border-b border-gray-50 last:border-0"
                                 >
-                                    <span><strong>{i.width}m</strong> | {i.itemName}</span>
-                                    <span className="text-gray-400 font-mono">({(i.totalStockMeters || 0).toFixed(1)}m)</span>
+                                    <span className="font-bold"><strong>{i.width}m</strong> | {i.itemName}</span>
+                                    <span className="text-gray-400 font-black text-[10px]">({(i.totalStockMeters || 0).toFixed(1)}m)</span>
                                 </li>
                             ))
                         ) : (
-                            <li className="px-3 py-4 text-xs text-center text-gray-500 italic">No materials found</li>
+                            <li className="px-5 py-8 text-xs text-center text-gray-400 font-bold uppercase">No matching rolls</li>
                         )}
                     </ul>
                 </div>
@@ -261,16 +241,19 @@ const SearchableMaterialSelect: React.FC<{
 };
 
 const SalesView: React.FC<SalesViewProps> = ({ 
-  sales, inventory, customers, currentUser, users, quoteForSale, clearQuote,
+  sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, clearQuote,
   onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut
 }) => {
   const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
+  const [isNarrationModalOpen, setIsNarrationModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<(Sale & { customer: Customer }) | null>(null);
   const [payingSale, setPayingSale] = useState<Sale | null>(null);
   const [saleForUsage, setSaleForUsage] = useState<Sale | null>(null);
+  const [saleForNarration, setSaleForNarration] = useState<Sale | null>(null);
+  const [editedNarration, setEditedNarration] = useState('');
   const [usageEntries, setUsageEntries] = useState<{[key: string]: { skuId: string, meters: number }}>({});
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
@@ -308,12 +291,13 @@ const SalesView: React.FC<SalesViewProps> = ({
       status: amountPaid >= totalQuote ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid',
       userId: currentUser.id,
       userName: currentUser.username,
+      notes: quoteNarration || '',
       payments: amountPaid > 0 ? [{
           id: uuidv4(),
           date: new Date().toISOString(),
           amount: amountPaid,
           recordedBy: currentUser.username,
-          note: 'Initial payment'
+          note: 'Deposit'
       }] : []
     };
     await onAddSale(saleData);
@@ -333,11 +317,26 @@ const SalesView: React.FC<SalesViewProps> = ({
         });
         if (newCustomer) {
             setCustomerId(newCustomer.id);
-            addToast(`Customer "${name}" registered and selected.`, 'success');
+            addToast(`Customer "${name}" registered and assigned.`, 'success');
         }
     } catch (e) {
-        addToast("Failed to quickly register customer.", "error");
+        addToast("Registry failure. Try again.", "error");
     }
+  };
+
+  const handleOpenNarration = (sale: Sale) => {
+      setSaleForNarration(sale);
+      setEditedNarration(sale.notes || '');
+      setIsNarrationModalOpen(true);
+  };
+
+  const handleSaveNarration = async () => {
+      if (saleForNarration) {
+          await onUpdateSale({ ...saleForNarration, notes: editedNarration });
+          addToast("Internal narration updated successfully.", "success");
+          setIsNarrationModalOpen(false);
+          setSaleForNarration(null);
+      }
   };
 
   const handleOpenPayment = (sale: Sale) => {
@@ -369,7 +368,7 @@ const SalesView: React.FC<SalesViewProps> = ({
     };
 
     await onUpdateSale(updatedSale);
-    addToast(`Payment of ${formatUGX(paymentAmount)} recorded for Invoice #${payingSale.id.substring(0,8)}`, 'success');
+    addToast(`Payment of ${formatUGX(paymentAmount)} received.`, 'success');
     setIsPaymentModalOpen(false);
     setPayingSale(null);
   };
@@ -405,8 +404,8 @@ const SalesView: React.FC<SalesViewProps> = ({
             await onStockOut(
                 entry.skuId, 
                 entry.meters, 
-                `Invoice #${saleForUsage.id.substring(0,8)}`, 
-                `Usage for ${item.name}`
+                `INV-${saleForUsage.id.substring(0,8)}`, 
+                `Consumption for ${item.name}`
             );
             processedCount++;
         }
@@ -417,7 +416,7 @@ const SalesView: React.FC<SalesViewProps> = ({
             ...saleForUsage,
             usageLogged: true
         });
-        addToast(`Inventory updated for Invoice #${saleForUsage.id.substring(0,8)}`, "success");
+        addToast(`Machine consumption logged for #${saleForUsage.id.substring(0,8)}`, "success");
     }
     
     setIsUsageModalOpen(false);
@@ -445,23 +444,19 @@ const SalesView: React.FC<SalesViewProps> = ({
   const filteredSales = useMemo(() => {
     let list = sales;
     
-    // User Restriction: non-admins only see today's sales
     if (currentUser.role !== 'admin') {
       const today = new Date().toDateString();
       list = list.filter(s => s.userId === currentUser.id && new Date(s.date).toDateString() === today);
     } else {
-      // Admin Filters
       if (filterUser !== 'All') {
         list = list.filter(s => s.userId === filterUser);
       }
     }
 
-    // Status Filter
     if (filterStatus !== 'All') {
         list = list.filter(s => s.status === filterStatus);
     }
 
-    // Date Range Filter
     if (filterDateStart) {
         const start = new Date(filterDateStart);
         start.setHours(0,0,0,0);
@@ -473,7 +468,6 @@ const SalesView: React.FC<SalesViewProps> = ({
         list = list.filter(s => new Date(s.date) <= end);
     }
 
-    // Search Query (Invoice ID or Customer Name)
     if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         list = list.filter(s => {
@@ -489,107 +483,110 @@ const SalesView: React.FC<SalesViewProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-2xl font-black text-black uppercase tracking-tight">Sales Records</h2>
+        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Sales Operations</h2>
         <button 
           onClick={() => setIsAddSaleOpen(true)} 
-          className="bg-yellow-500 text-[#1A2232] px-6 py-2.5 rounded-xl font-black flex items-center shadow-lg hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-xs"
+          className="bg-yellow-500 text-[#1A2232] px-8 py-3.5 rounded-2xl font-black flex items-center shadow-xl hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-xs border border-yellow-600/10"
         >
-          <PlusIcon className="w-5 h-5 mr-2" /> New Sale
+          <PlusIcon className="w-5 h-5 mr-3" /> New Transaction
         </button>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+      {/* Optimized Filters Area */}
+      <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
-                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1 ml-1">Search Invoice/Customer</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Quick Search</label>
                 <div className="relative">
                     <input 
                         type="text" 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Type ID or Name..." 
-                        className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none"
+                        placeholder="Invoice # or Customer..." 
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                     />
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 </div>
             </div>
 
             <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1 ml-1">Payment Status</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Status</label>
                 <select 
                     value={filterStatus}
                     onChange={e => setFilterStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                 >
                     <option value="All">All Statuses</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Partially Paid">Partially Paid</option>
-                    <option value="Unpaid">Unpaid</option>
+                    <option value="Paid">Fully Paid</option>
+                    <option value="Partially Paid">Partial</option>
+                    <option value="Unpaid">Arrears</option>
                 </select>
             </div>
 
             {currentUser.role === 'admin' && (
                 <div>
-                    <label className="block text-[9px] font-black text-gray-400 uppercase mb-1 ml-1">Created By</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Sales Rep</label>
                     <select 
                         value={filterUser}
                         onChange={e => setFilterUser(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                     >
-                        <option value="All">All Users</option>
+                        <option value="All">All Staff</option>
                         {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                     </select>
                 </div>
             )}
 
             <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1 ml-1">From Date</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Start Date</label>
                 <input 
                     type="date" 
                     value={filterDateStart}
                     onChange={e => setFilterDateStart(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                 />
             </div>
 
             <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1 ml-1">To Date</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">End Date</label>
                 <input 
                     type="date" 
                     value={filterDateEnd}
                     onChange={e => setFilterDateEnd(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                 />
             </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+      <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
         <table className="w-full text-sm text-left">
-          <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[10px] tracking-widest">
+          <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[10px] tracking-[0.15em]">
             <tr>
-              <th className="px-6 py-5">Invoice ID</th>
-              <th className="px-6 py-5">Customer</th>
-              <th className="px-6 py-5">Date & Time</th>
-              <th className="px-6 py-5 text-right">Total</th>
-              <th className="px-6 py-5 text-center">Status</th>
-              <th className="px-6 py-5 text-center">Actions</th>
+              <th className="px-8 py-5">Invoice Ref</th>
+              <th className="px-8 py-5">Client Name</th>
+              <th className="px-8 py-5">Record Date</th>
+              <th className="px-8 py-5 text-right">Value</th>
+              <th className="px-8 py-5 text-center">Status</th>
+              <th className="px-8 py-5 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {filteredSales.map(sale => (
               <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
-                <td className="px-6 py-4 font-mono font-bold text-blue-600">#{sale.id.substring(0, 8).toUpperCase()}</td>
-                <td className="px-6 py-4 font-black text-black">{customers.find(c => c.id === sale.customerId)?.name || 'Guest'}</td>
-                <td className="px-6 py-4 text-black font-bold text-[11px]">
-                    {new Date(sale.date).toLocaleDateString([], { dateStyle: 'short' })}
-                    <span className="block text-[9px] text-gray-500 font-medium">
+                <td className="px-8 py-4 font-mono font-bold text-blue-600 text-xs">#{sale.id.substring(0, 8).toUpperCase()}</td>
+                <td className="px-8 py-4">
+                    <p className="font-black text-gray-900 text-sm uppercase tracking-tight">{customers.find(c => c.id === sale.customerId)?.name || 'Guest User'}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Contact: {customers.find(c => c.id === sale.customerId)?.phone || '-'}</p>
+                </td>
+                <td className="px-8 py-4 text-gray-600 font-bold text-[11px]">
+                    {new Date(sale.date).toLocaleDateString([], { dateStyle: 'medium' })}
+                    <span className="block text-[10px] text-gray-400 font-medium mt-0.5 uppercase">
                         {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                 </td>
-                <td className="px-6 py-4 text-right font-black text-black">{formatUGX(sale.total)}</td>
-                <td className="px-6 py-4 text-center">
+                <td className="px-8 py-4 text-right font-black text-gray-900 text-sm">{formatUGX(sale.total)}</td>
+                <td className="px-8 py-4 text-center">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
                     sale.status === 'Paid' ? 'bg-green-100 text-green-700' : 
                     sale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' :
@@ -598,17 +595,18 @@ const SalesView: React.FC<SalesViewProps> = ({
                     {sale.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-center">
+                <td className="px-8 py-4 text-center">
                   <div className="flex justify-center gap-2">
-                    <button onClick={() => handleViewInvoice(sale)} className="p-2 text-black hover:text-blue-600 transition-colors bg-blue-50 rounded-lg" title="View Invoice"><DocumentTextIcon className="w-5 h-5" /></button>
+                    <button onClick={() => handleViewInvoice(sale)} className="p-2.5 text-gray-900 hover:text-blue-600 transition-all bg-blue-50/50 rounded-xl hover:scale-110" title="Review Invoice"><DocumentTextIcon className="w-5 h-5" /></button>
+                    <button onClick={() => handleOpenNarration(sale)} className="p-2.5 text-gray-900 hover:text-purple-600 transition-all bg-purple-50/50 rounded-xl hover:scale-110" title="Job Production Notes"><EditIcon className="w-5 h-5" /></button>
                     {sale.status !== 'Paid' && (
-                        <button onClick={() => handleOpenPayment(sale)} className="p-2 text-black hover:text-green-600 transition-colors bg-green-50 rounded-lg" title="Add Payment"><BanknotesIcon className="w-5 h-5" /></button>
+                        <button onClick={() => handleOpenPayment(sale)} className="p-2.5 text-gray-900 hover:text-green-600 transition-all bg-green-50/50 rounded-xl hover:scale-110" title="Receive Payment"><BanknotesIcon className="w-5 h-5" /></button>
                     )}
                     {isLoggable(sale) && (
-                        <button onClick={() => handleOpenUsageModal(sale)} className="p-2 text-red-600 hover:text-red-700 transition-colors bg-red-50 rounded-lg animate-blink" title="Log Usage (Urgent)"><BeakerIcon className="w-5 h-5" /></button>
+                        <button onClick={() => handleOpenUsageModal(sale)} className="p-2.5 text-red-600 hover:text-red-700 transition-all bg-red-50/50 rounded-xl animate-blink" title="Consumption Log (Urgent)"><BeakerIcon className="w-5 h-5" /></button>
                     )}
                     {currentUser.role === 'admin' && (
-                       <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} className="p-2 text-black hover:text-red-600 transition-colors bg-red-50 rounded-lg" title="Delete Record"><TrashIcon className="w-4 h-4" /></button>
+                       <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} className="p-2.5 text-gray-900 hover:text-red-600 transition-all bg-red-50/50 rounded-xl hover:scale-110" title="Purge Record"><TrashIcon className="w-5 h-5" /></button>
                     )}
                   </div>
                 </td>
@@ -616,50 +614,86 @@ const SalesView: React.FC<SalesViewProps> = ({
             ))}
             {filteredSales.length === 0 && (
                 <tr>
-                    <td colSpan={6} className="px-6 py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No sales records found</td>
+                    <td colSpan={6} className="px-8 py-24 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Zero transactional flow detected</td>
                 </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Usage Log Modal */}
-      <Modal isOpen={isUsageModalOpen} onClose={() => setIsUsageModalOpen(false)} title="Log Printing Usage">
+      {/* Narration Modal - Production Details */}
+      <Modal isOpen={isNarrationModalOpen} onClose={() => setIsNarrationModalOpen(false)} title="Internal Production Tracking">
           <div className="space-y-6">
-              <p className="text-sm text-black font-medium bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                  Select the material roll used and enter the printed meters for <strong>Invoice #{saleForUsage?.id.substring(0,8).toUpperCase()}</strong>.
+              <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
+                  <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">INVOICED BILLABLES</h4>
+                  <div className="space-y-2">
+                      {saleForNarration?.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between text-xs font-black tracking-tight uppercase">
+                              <span className="text-gray-600">{item.name} <span className="text-gray-400 font-bold ml-1">x {item.quantity}</span></span>
+                              <span className="text-gray-900">{formatUGX(item.price * item.quantity)}</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+              <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Job Narration / Workflow Notes</label>
+                  <textarea 
+                    value={editedNarration} 
+                    onChange={e => setEditedNarration(e.target.value)}
+                    className="w-full p-5 border-2 border-gray-100 rounded-[2rem] text-sm font-bold text-gray-900 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none min-h-[160px] resize-none shadow-inner"
+                    placeholder="Document specific client requests, production steps, or machine settings here..."
+                  />
+                  <div className="mt-4 flex items-start gap-3 bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
+                      <div className="p-1.5 bg-yellow-400 rounded-lg shrink-0 mt-0.5"><BeakerIcon className="w-3.5 h-3.5 text-gray-900"/></div>
+                      <p className="text-[10px] text-yellow-800 font-bold leading-relaxed uppercase tracking-tight">Disclaimer: These notes are strictly for the internal team. They will not be printed on receipts or invoices sent to clients.</p>
+                  </div>
+              </div>
+              <button 
+                onClick={handleSaveNarration}
+                className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl active:scale-95 transition-transform border border-yellow-400/10"
+              >
+                Update Production Log
+              </button>
+          </div>
+      </Modal>
+
+      {/* Machine Usage Logging */}
+      <Modal isOpen={isUsageModalOpen} onClose={() => setIsUsageModalOpen(false)} title="Machine Output Calibration">
+          <div className="space-y-6">
+              <p className="text-sm text-gray-900 font-black uppercase tracking-tight bg-yellow-400/10 p-5 rounded-3xl border border-yellow-400/20 leading-relaxed text-center">
+                  Record material consumption for <br /><strong className="text-blue-700 text-lg">INV-#{saleForUsage?.id.substring(0,8).toUpperCase()}</strong>
               </p>
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="overflow-x-auto border-2 border-gray-50 rounded-[2.5rem] shadow-inner bg-gray-50/30 p-2">
                   <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-black font-black uppercase text-[10px]">
+                      <thead className="text-gray-400 font-black uppercase text-[10px] tracking-widest">
                           <tr>
-                              <th className="px-4 py-3">Invoice Item</th>
-                              <th className="px-4 py-3">Roll Material</th>
-                              <th className="px-4 py-3 text-right">Meters</th>
+                              <th className="px-5 py-4">Billable Item</th>
+                              <th className="px-5 py-4">Material Roll</th>
+                              <th className="px-5 py-4 text-right">Linear Metres</th>
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100">
                           {saleForUsage?.items.map((item, index) => {
                               const isPrintItem = item.name.toLowerCase().includes('print') || item.name.toLowerCase().includes('roll') || item.name.toLowerCase().includes('dtf') || item.name.toLowerCase().includes('banner');
                               if (!isPrintItem) return null;
                               return (
-                                  <tr key={index}>
-                                      <td className="px-4 py-3 font-bold text-black text-xs">{item.name}</td>
-                                      <td className="px-4 py-3">
+                                  <tr key={index} className="bg-white">
+                                      <td className="px-5 py-4 font-black text-gray-900 text-xs uppercase max-w-[140px] truncate">{item.name}</td>
+                                      <td className="px-5 py-4 min-w-[240px]">
                                           <SearchableMaterialSelect 
                                             items={stockItems}
                                             value={usageEntries[index]?.skuId || ''}
                                             onChange={(skuId) => setUsageEntries(prev => ({ ...prev, [index]: { ...prev[index], skuId } }))}
                                           />
                                       </td>
-                                      <td className="px-4 py-3 text-right">
+                                      <td className="px-5 py-4 text-right">
                                           <input 
                                             type="number" 
                                             step="0.01"
                                             value={usageEntries[index]?.meters || ''} 
                                             placeholder="0.00"
                                             onChange={e => setUsageEntries(prev => ({ ...prev, [index]: { ...prev[index], meters: parseFloat(e.target.value) || 0 } }))}
-                                            className="block w-20 ml-auto text-right text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 font-black text-black"
+                                            className="block w-20 ml-auto text-right text-xs rounded-xl border-gray-200 shadow-inner focus:ring-2 focus:ring-blue-500 font-black text-blue-700 p-3"
                                           />
                                       </td>
                                   </tr>
@@ -670,17 +704,18 @@ const SalesView: React.FC<SalesViewProps> = ({
               </div>
               <button 
                 onClick={handleSaveUsage} 
-                className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-gray-800 transition-all active:scale-95"
+                className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl active:scale-95 border border-yellow-400/10"
               >
-                Save Log & Deduct Inventory
+                Sync Stock & Deduct Materials
               </button>
           </div>
       </Modal>
 
-      <Modal isOpen={isAddSaleOpen} onClose={() => { setIsAddSaleOpen(false); clearQuote(); }} title="Confirm New Sale">
+      {/* Confirmation of Transaction */}
+      <Modal isOpen={isAddSaleOpen} onClose={() => { setIsAddSaleOpen(false); clearQuote(); }} title="Transaction Authentication">
         <div className="space-y-6">
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Assign Customer</label>
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Assign Bill to Client</label>
             <SearchableCustomerSelect 
                 customers={customers}
                 value={customerId}
@@ -689,83 +724,85 @@ const SalesView: React.FC<SalesViewProps> = ({
             />
           </div>
 
-          <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-3">
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-2 mb-4">Order Summary</p>
-             {quoteForSale.map((item, i) => (
-               <div key={i} className="flex justify-between items-start text-sm">
-                 <span className="text-black font-bold leading-tight flex-1 pr-4">{item.name} <span className="text-gray-500 font-medium">x {item.quantity}</span></span>
-                 <strong className="text-black font-black whitespace-nowrap">{formatUGX(item.price * item.quantity)}</strong>
-               </div>
-             ))}
-             <div className="pt-4 mt-2 border-t border-gray-200 flex justify-between items-baseline">
-               <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Total Payable</span>
-               <span className="text-3xl font-black text-blue-800 tracking-tighter">{formatUGX(totalQuote)}</span>
+          <div className="bg-gray-50 p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-inner space-y-4">
+             <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-2 text-center">AGGREGATE BILL</h4>
+             <div className="max-h-48 overflow-y-auto pr-2 space-y-3 scrollbar-thin">
+                {quoteForSale.map((item, i) => (
+                <div key={i} className="flex justify-between items-start text-xs font-black uppercase">
+                    <span className="text-gray-600 flex-1 pr-6 truncate">{item.name} <span className="text-gray-400 font-bold lowercase ml-1">x{item.quantity}</span></span>
+                    <strong className="text-gray-900 whitespace-nowrap">{formatUGX(item.price * item.quantity)}</strong>
+                </div>
+                ))}
+             </div>
+             <div className="pt-4 mt-2 border-t-2 border-dashed border-gray-200 flex justify-between items-baseline">
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Payable Total</span>
+               <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(totalQuote)}</span>
              </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Amount Received (UGX)</label>
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Initial Remittance (UGX)</label>
             <input 
               type="number" 
               value={amountPaid || ''} 
               onChange={e => setAmountPaid(parseInt(e.target.value) || 0)} 
-              className="w-full p-4 border border-gray-200 rounded-xl bg-white text-black font-black text-xl focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
-              placeholder="0"
+              className="w-full p-5 border-2 border-gray-100 rounded-[2rem] bg-white text-gray-900 font-black text-2xl focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 outline-none shadow-xl transition-all"
+              placeholder="Enter cash amount..."
             />
           </div>
 
           <button 
             onClick={handleCreateSale} 
             disabled={!customerId || quoteForSale.length === 0}
-            className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+            className="w-full bg-[#1A2232] text-yellow-400 py-6 rounded-[2rem] font-black uppercase tracking-[0.25em] text-xs shadow-2xl active:scale-95 disabled:opacity-30 disabled:grayscale transition-all"
           >
-            Finalize Invoice
+            Authenticate & Generate Invoice
           </button>
         </div>
       </Modal>
 
-      {/* Record Payment Modal */}
-      <Modal isOpen={isPaymentModalOpen} onClose={() => { setIsPaymentModalOpen(false); setPayingSale(null); }} title="Record Payment">
+      {/* Debt Recovery Payment */}
+      <Modal isOpen={isPaymentModalOpen} onClose={() => { setIsPaymentModalOpen(false); setPayingSale(null); }} title="Debt Clearance Protocol">
         <div className="space-y-6">
             {payingSale && (
                 <>
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                        <div className="flex justify-between items-center mb-4">
-                             <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Invoice #{payingSale.id.substring(0,8)}</span>
-                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${payingSale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{payingSale.status}</span>
+                    <div className="bg-gray-50 p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-inner">
+                        <div className="flex justify-between items-center mb-5">
+                             <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase tracking-widest border border-blue-100">REF: #{payingSale.id.substring(0,8).toUpperCase()}</span>
+                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight ${payingSale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{payingSale.status}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                             <div>
-                                 <p className="text-[9px] font-black text-gray-400 uppercase">Total Due</p>
-                                 <p className="text-lg font-black text-black">{formatUGX(payingSale.total)}</p>
+                             <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Total Bill</p>
+                                 <p className="text-sm font-black text-gray-900">{formatUGX(payingSale.total)}</p>
                              </div>
-                             <div>
-                                 <p className="text-[9px] font-black text-gray-400 uppercase">Already Paid</p>
-                                 <p className="text-lg font-black text-green-600">{formatUGX(payingSale.amountPaid || 0)}</p>
+                             <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Cleared</p>
+                                 <p className="text-sm font-black text-green-600">{formatUGX(payingSale.amountPaid || 0)}</p>
                              </div>
-                             <div className="col-span-2 pt-3 border-t border-gray-200">
-                                 <p className="text-[9px] font-black text-gray-400 uppercase">Current Balance</p>
-                                 <p className="text-2xl font-black text-red-600">{formatUGX(payingSale.total - (payingSale.amountPaid || 0))}</p>
+                             <div className="col-span-2 p-5 bg-red-50 rounded-3xl border border-red-100 text-center">
+                                 <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] mb-1">Outstanding Liability</p>
+                                 <p className="text-3xl font-black text-red-600 tracking-tighter">{formatUGX(payingSale.total - (payingSale.amountPaid || 0))}</p>
                              </div>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Payment Amount (UGX)</label>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Payment Collected (UGX)</label>
                         <input 
                             type="number" 
                             value={paymentAmount || ''} 
                             onChange={e => setPaymentAmount(parseInt(e.target.value) || 0)} 
-                            className="w-full p-4 border border-gray-200 rounded-xl bg-white text-black font-black text-xl focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
+                            className="w-full p-5 border-2 border-gray-100 rounded-[2rem] bg-white text-gray-900 font-black text-2xl focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 outline-none shadow-xl"
                             placeholder="0"
                         />
                     </div>
 
                     <button 
                         onClick={handleRecordPayment} 
-                        className="w-full bg-green-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50"
+                        className="w-full bg-green-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 disabled:opacity-50 transition-all"
                     >
-                        Confirm Payment
+                        Confirm Debt Clearance
                     </button>
                 </>
             )}
@@ -778,8 +815,8 @@ const SalesView: React.FC<SalesViewProps> = ({
         isOpen={isConfirmDeleteOpen} 
         onClose={() => setIsConfirmDeleteOpen(false)} 
         onConfirm={() => saleToDelete && onDeleteSale(saleToDelete)} 
-        title="Delete Sale Record" 
-        message="This will permanently delete the sale record. Continue?" 
+        title="Administrative Purge" 
+        message="This operation will permanently erase this transactional record from the master log. Proceed with authentication?" 
       />
     </div>
   );

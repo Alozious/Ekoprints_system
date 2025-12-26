@@ -1,3 +1,4 @@
+
 export interface ProductCategory {
   id: string;
   name: string; // e.g. "Tshirt"
@@ -75,6 +76,7 @@ export interface Sale {
   userName?: string;
   payments?: Payment[];
   usageLogged?: boolean;
+  notes?: string;
 }
 
 export interface Expense {

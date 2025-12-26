@@ -8,7 +8,7 @@ interface LogoProps {
 
 /**
  * Renders the Eko Prints brand logo.
- * It uses the absolute path /assets/logo.png to ensure it resolves from the root.
+ * Path: /assets/logo.png (ensure folder and filename are lowercase)
  */
 const Logo: React.FC<LogoProps> = ({ className = "h-12", showTagline = false }) => {
   const [error, setError] = useState(false);
@@ -20,7 +20,7 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", showTagline = false }) 
     img.src = logoPath;
     img.onload = () => setError(false);
     img.onerror = () => {
-        console.warn(`Logo image not found at ${logoPath}. Check if 'assets/logo.png' exists in your root folder.`);
+        console.warn(`Logo image not found at ${logoPath}. Using fallback UI.`);
         setError(true);
     };
   }, [logoPath]);
@@ -48,7 +48,7 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", showTagline = false }) 
       )}
       
       {showTagline && (
-        <span className={`text-[9px] font-black tracking-[0.35em] uppercase mt-2 ${error ? 'text-gray-400' : 'text-gray-400'}`}>
+        <span className="text-[9px] font-black tracking-[0.35em] uppercase mt-2 text-gray-400">
           Design | Print | Brand
         </span>
       )}

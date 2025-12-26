@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { StockItem, PricingTier, SaleItem, InventoryItem, MaterialCategory, ProductCategory } from '../types';
-import { PlusIcon, TrashIcon, DocumentTextIcon, ChevronDownIcon } from './icons';
+import { PlusIcon, TrashIcon, DocumentTextIcon, ChevronDownIcon, SearchIcon } from './icons';
 import { useToast } from '../App';
 
 interface CalculatorViewProps {
@@ -126,6 +127,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
     const [negotiatedPrice, setNegotiatedPrice] = useState<number>(0);
     const [simpleQuantity, setSimpleQuantity] = useState(1);
+    const [itemSearchQuery, setItemSearchQuery] = useState('');
 
     // Others (Manual Entry) State
     const [manualItemName, setManualItemName] = useState('');
@@ -146,6 +148,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     useEffect(() => {
         setExtraAmount(0);
         setExtraAmountLabel('');
+        setItemSearchQuery('');
         if (activeTabConfig.type === 'simple') {
             setSelectedProductCategory('');
             setActiveFilters({});
@@ -180,19 +183,41 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     [selectedProductCategory, productCategories]);
 
     const filteredInventory = useMemo(() => {
-        if (!selectedProductCategory) return [];
-        return inventory.filter(item => {
-            if (item.category !== selectedProductCategory) return false;
-            if (activeTab !== 'supplies' && item.isConsumable) return false;
+        let items = inventory;
 
-            if (activeFilters.attr1 && item.attr1 !== activeFilters.attr1) return false;
-            if (activeFilters.attr2 && item.attr2 !== activeFilters.attr2) return false;
-            if (activeFilters.attr3 && item.attr3 !== activeFilters.attr3) return false;
-            if (activeFilters.attr4 && item.attr4 !== activeFilters.attr4) return false;
-            if (activeFilters.attr5 && item.attr5 !== activeFilters.attr5) return false;
-            return true;
-        });
-    }, [inventory, selectedProductCategory, activeFilters, activeTab]);
+        // Tab Filtering
+        if (activeTab === 'supplies') {
+            items = items.filter(i => i.isConsumable);
+        } else {
+            items = items.filter(i => !i.isConsumable);
+            const keywords = CATEGORY_KEYWORDS[activeTab];
+            if (keywords && activeTab !== 'products') {
+                items = items.filter(i => keywords.some(k => i.category.toLowerCase().includes(k) || i.name.toLowerCase().includes(k)));
+            }
+        }
+
+        // Search Query
+        if (itemSearchQuery.trim()) {
+            const query = itemSearchQuery.toLowerCase();
+            items = items.filter(i => 
+                i.name.toLowerCase().includes(query) || 
+                i.category.toLowerCase().includes(query) ||
+                [i.attr1, i.attr2, i.attr3, i.attr4, i.attr5].some(a => a?.toLowerCase().includes(query))
+            );
+        }
+
+        // Category & Attribute Filters
+        if (selectedProductCategory) {
+            items = items.filter(i => i.category === selectedProductCategory);
+            if (activeFilters.attr1 && items.some(i => i.attr1 === activeFilters.attr1)) items = items.filter(i => i.attr1 === activeFilters.attr1);
+            if (activeFilters.attr2 && items.some(i => i.attr2 === activeFilters.attr2)) items = items.filter(i => i.attr2 === activeFilters.attr2);
+            if (activeFilters.attr3 && items.some(i => i.attr3 === activeFilters.attr3)) items = items.filter(i => i.attr3 === activeFilters.attr3);
+            if (activeFilters.attr4 && items.some(i => i.attr4 === activeFilters.attr4)) items = items.filter(i => i.attr4 === activeFilters.attr4);
+            if (activeFilters.attr5 && items.some(i => i.attr5 === activeFilters.attr5)) items = items.filter(i => i.attr5 === activeFilters.attr5);
+        }
+
+        return items;
+    }, [inventory, selectedProductCategory, activeFilters, activeTab, itemSearchQuery]);
 
     // Dimension Calc Tiers
     const availableStockItems = useMemo(() => {
@@ -461,116 +486,149 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
                     {activeTabConfig.type === 'simple' && (
                         <div className="fade-in space-y-6">
-                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1 text-black">PRIMARY CATEGORY FOR {activeTab.toUpperCase()}</label>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {/* Restored and Improved Search Bar for Products */}
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <SearchIcon className="h-5 w-5 text-gray-400 group-focus-within:text-yellow-500 transition-colors" />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    value={itemSearchQuery}
+                                    onChange={e => { setItemSearchQuery(e.target.value); setSelectedProduct(null); }}
+                                    placeholder="SEARCH PRODUCTS BY NAME, CODE OR SPEC..." 
+                                    className="block w-full rounded-2xl border-2 border-gray-100 bg-gray-50 pl-11 pr-4 py-4 text-xs font-black text-black placeholder-gray-400 focus:bg-white focus:border-yellow-400 focus:ring-0 outline-none transition-all uppercase tracking-widest shadow-inner"
+                                />
+                            </div>
+
+                             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-inner">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 ml-1 text-black">FILTER BY MODULE CATEGORY</label>
+                                <div className="flex flex-wrap gap-2">
+                                    <button 
+                                        onClick={() => { setSelectedProductCategory(''); setActiveFilters({}); setSelectedProduct(null); setNegotiatedPrice(0); }}
+                                        className={`py-2 px-4 text-[10px] font-black rounded-xl border-2 transition-all uppercase tracking-tighter ${selectedProductCategory === '' ? 'bg-yellow-100 border-yellow-400 text-yellow-800 shadow-sm' : 'bg-white border-gray-100 text-gray-400 hover:border-yellow-200'}`}
+                                    >
+                                        ALL PRODUCTS
+                                    </button>
                                     {filteredProductCategories.map(cat => (
                                         <button 
                                             key={cat.id} 
                                             onClick={() => { setSelectedProductCategory(cat.name); setActiveFilters({}); setSelectedProduct(null); setNegotiatedPrice(0); }}
-                                            className={`py-3 px-2 text-[10px] font-black rounded-xl border-2 transition-all uppercase tracking-tighter ${selectedProductCategory === cat.name ? 'bg-yellow-100 border-yellow-400 text-yellow-800 shadow-inner' : 'bg-white border-gray-100 text-gray-400 hover:border-yellow-200'}`}
+                                            className={`py-2 px-4 text-[10px] font-black rounded-xl border-2 transition-all uppercase tracking-tighter ${selectedProductCategory === cat.name ? 'bg-yellow-100 border-yellow-400 text-yellow-800 shadow-sm' : 'bg-white border-gray-100 text-gray-400 hover:border-yellow-200'}`}
                                         >
                                             {cat.name}
                                         </button>
                                     ))}
-                                    {filteredProductCategories.length === 0 && (
-                                        <p className="col-span-full text-center py-4 text-xs text-gray-400 italic">No categories defined for this module.</p>
-                                    )}
                                 </div>
                             </div>
 
-                            {activeConfig && (
+                            {(activeConfig || filteredInventory.length > 0) && (
                                 <div className="space-y-4 pt-4 border-t border-gray-100 slide-in-up">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">REFINE SELECTION (CASCADING FILTERS)</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {[1,2,3,4,5].map(num => {
-                                            const label = (activeConfig as any)[`field${num}`];
-                                            const options = (activeConfig as any)[`field${num}Options`] as string[];
-                                            if (!label) return null;
-                                            return (
-                                                <div key={num}>
-                                                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 ml-1 text-black">{label}</label>
-                                                    <select 
-                                                        value={activeFilters[`attr${num}`] || ''} 
-                                                        onChange={e => { setActiveFilters(prev => ({ ...prev, [`attr${num}`]: e.target.value })); setSelectedProduct(null); setNegotiatedPrice(0); }}
-                                                        className={darkInputClass}
-                                                    >
-                                                        <option value="" className="bg-white text-black">-- ALL {label.toUpperCase()} --</option>
-                                                        {options.map(o => <option key={o} value={o} className="bg-white text-black">{o}</option>)}
-                                                    </select>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                    {activeConfig && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {[1,2,3,4,5].map(num => {
+                                                const label = (activeConfig as any)[`field${num}`];
+                                                const options = (activeConfig as any)[`field${num}Options`] as string[];
+                                                if (!label) return null;
+                                                return (
+                                                    <div key={num}>
+                                                        <label className="block text-[8px] font-black text-gray-400 uppercase mb-1 ml-1 text-black">{label}</label>
+                                                        <select 
+                                                            value={activeFilters[`attr${num}`] || ''} 
+                                                            onChange={e => { setActiveFilters(prev => ({ ...prev, [`attr${num}`]: e.target.value })); setSelectedProduct(null); setNegotiatedPrice(0); }}
+                                                            className="block w-full rounded-xl border border-gray-200 bg-white text-black font-black text-[10px] px-3 py-2 outline-none focus:border-yellow-400"
+                                                        >
+                                                            <option value="" className="bg-white text-black">-- ALL {label.toUpperCase()} --</option>
+                                                            {options.map(o => <option key={o} value={o} className="bg-white text-black">{o}</option>)}
+                                                        </select>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
 
                                     <div className="mt-4">
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1 text-black">AVAILABLE STOCK MATCHES ({filteredInventory.length})</label>
-                                        <div className="max-h-48 overflow-y-auto space-y-2 border border-gray-100 p-2 rounded-xl bg-gray-50/50 scrollbar-thin">
+                                        <div className="flex justify-between items-center mb-2 px-1">
+                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest text-black">AVAILABLE ITEMS ({filteredInventory.length})</label>
+                                            <span className="text-[9px] font-bold text-gray-300 uppercase italic">Sorted by matching specs</span>
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-100 p-2 rounded-2xl bg-gray-50/30 scrollbar-thin">
                                             {filteredInventory.map(item => (
                                                 <button 
                                                     key={item.id} 
                                                     onClick={() => { setSelectedProduct(item); setNegotiatedPrice(item.price); }}
-                                                    className={`w-full flex justify-between items-center p-3 rounded-xl border-2 transition-all ${selectedProduct?.id === item.id ? 'bg-green-100 border-green-500 text-green-900 shadow-md scale-[1.01]' : 'bg-white border-transparent hover:border-green-100 text-black'}`}
+                                                    className={`w-full flex justify-between items-center p-4 rounded-2xl border-2 transition-all ${selectedProduct?.id === item.id ? 'bg-blue-100 border-blue-500 text-blue-900 shadow-md scale-[1.01]' : 'bg-white border-transparent hover:border-blue-100 text-black shadow-sm'}`}
                                                 >
                                                     <div className="text-left">
-                                                        <p className="text-xs font-black uppercase tracking-tight text-black">{item.name}</p>
-                                                        <p className="text-[9px] opacity-70 font-bold text-black">{[item.attr1, item.attr2, item.attr3, item.attr4, item.attr5].filter(Boolean).join(' · ')}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-[11px] font-black uppercase tracking-tight text-black">{item.name}</p>
+                                                            <span className="text-[8px] font-black px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded uppercase">{item.category}</span>
+                                                        </div>
+                                                        <p className="text-[10px] opacity-70 font-bold text-gray-600 mt-1">{[item.attr1, item.attr2, item.attr3, item.attr4, item.attr5].filter(Boolean).join(' · ')}</p>
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-sm font-black text-black">{formatUGX(item.price)}</p>
-                                                        <p className={`text-[8px] font-bold ${item.quantity <= (item.minStockLevel || 5) ? 'text-red-500' : 'text-gray-500'}`}>Qty: {item.quantity}</p>
+                                                        <p className={`text-[9px] font-black ${item.quantity <= (item.minStockLevel || 5) ? 'text-red-500 animate-pulse' : 'text-gray-400'} uppercase`}>Qty: {item.quantity}</p>
                                                     </div>
                                                 </button>
                                             ))}
-                                            {filteredInventory.length === 0 && <p className="text-center py-8 text-xs text-gray-400 font-bold italic">No items match your current selection criteria.</p>}
+                                            {filteredInventory.length === 0 && <div className="text-center py-16 text-gray-400 font-bold italic text-xs uppercase tracking-widest opacity-50">No products found for this search.</div>}
                                         </div>
                                     </div>
 
                                     {selectedProduct && (
-                                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-4 slide-in-up">
-                                            <div className="flex justify-between items-end gap-4">
-                                                <div className="flex-1">
-                                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 ml-1">NEGOTIATED UNIT PRICE (UGX)</label>
+                                        <div className="bg-white p-6 rounded-2xl border-2 border-blue-100 shadow-2xl space-y-5 slide-in-up">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Transaction Setup</h4>
+                                                <div className="text-right">
+                                                     <p className="text-[9px] font-black text-gray-400 uppercase">Standard Price: {formatUGX(selectedProduct.price)}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5 ml-1">NEGOTIATED UNIT PRICE (UGX)</label>
                                                     <div className="relative">
                                                         <input 
                                                             type="text" 
                                                             value={formatNumberWithCommas(negotiatedPrice)} 
                                                             onChange={e => setNegotiatedPrice(parseCommaString(e.target.value))} 
-                                                            className={`block w-full rounded-md border-2 ${negotiatedPrice < (selectedProduct.minPrice || 0) ? 'border-red-500 focus:border-red-600 focus:ring-red-600' : 'border-gray-300 focus:border-yellow-500 focus:ring-yellow-500'} bg-white text-black shadow-sm sm:text-sm font-black px-3 py-2.5`}
+                                                            className={`block w-full rounded-xl border-2 ${negotiatedPrice < (selectedProduct.minPrice || 0) ? 'border-red-500 focus:border-red-600 focus:ring-red-600' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500'} bg-white text-black shadow-sm text-sm font-black px-4 py-3 outline-none transition-all`}
                                                         />
                                                         {negotiatedPrice < (selectedProduct.minPrice || 0) && (
-                                                            <p className="text-[9px] text-red-600 font-bold mt-1 ml-1 uppercase">Below limit: {formatUGX(selectedProduct.minPrice || 0)}</p>
+                                                            <p className="text-[9px] text-red-600 font-bold mt-1.5 ml-1 uppercase tracking-tighter">⚠️ Limit Reached: {formatUGX(selectedProduct.minPrice || 0)}</p>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="text-right shrink-0">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase">Preferred: {formatUGX(selectedProduct.price)}</p>
-                                                    <p className="text-[9px] font-black text-red-400 uppercase">Min Limit: {formatUGX(selectedProduct.minPrice || 0)}</p>
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5 ml-1">TRANSACTION QUANTITY</label>
+                                                    <input type="number" min="1" value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={`${darkInputClass} border-2 rounded-xl py-3 px-4 outline-none border-gray-200`} />
                                                 </div>
                                             </div>
                                             
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1 text-black">QUANTITY</label>
-                                                    <input type="number" min="1" value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 ml-1">DESIGN/EXTRA FEE (UGX)</label>
-                                                    <input type="text" value={formatNumberWithCommas(extraAmount)} onChange={e => setExtraAmount(parseCommaString(e.target.value))} className={`${darkInputClass} border-2 border-blue-100 focus:border-blue-400`} placeholder="0" />
+                                            <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex-1">
+                                                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">EXTRA FEE / DESIGN COST (UGX)</label>
+                                                        <input type="text" value={formatNumberWithCommas(extraAmount)} onChange={e => setExtraAmount(parseCommaString(e.target.value))} className="block w-full rounded-lg border border-gray-200 bg-white text-black text-xs font-black px-3 py-2 outline-none focus:border-blue-400" placeholder="0" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">FEE DESCRIPTION</label>
+                                                        <input type="text" value={extraAmountLabel} onChange={e => setExtraAmountLabel(e.target.value)} className="block w-full rounded-lg border border-gray-200 bg-white text-black text-xs font-bold px-3 py-2 outline-none focus:border-blue-400" placeholder="e.g. Graphic Work" />
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <div className="p-4 bg-green-50 border-2 border-dashed border-green-200 rounded-xl text-center">
-                                                <p className="text-[10px] text-green-500 font-black uppercase tracking-[0.2em]">AGGREGATE ITEM COST</p>
-                                                <p className="text-4xl font-black text-green-700 mt-1">{formatUGX(totalSimplePrice)}</p>
+                                            <div className="p-5 bg-blue-600 text-white rounded-2xl text-center shadow-xl shadow-blue-500/20">
+                                                <p className="text-[10px] font-black uppercase tracking-[0.25em] opacity-80">AGGREGATE TRANSACTION TOTAL</p>
+                                                <p className="text-5xl font-black mt-2 tracking-tighter">{formatUGX(totalSimplePrice)}</p>
                                             </div>
 
                                             <button 
                                                 onClick={handleAddSimpleToQuote} 
                                                 disabled={negotiatedPrice < (selectedProduct.minPrice || 0)}
-                                                className="w-full bg-green-600 text-white font-black py-4 rounded-xl shadow-xl hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale uppercase tracking-widest text-xs"
+                                                className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-2xl shadow-xl hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale uppercase tracking-[0.2em] text-[10px] border border-yellow-400/10"
                                             >
-                                                Append Item(s) to Quote
+                                                APPEND ITEM TO SCRATCHPAD
                                             </button>
                                         </div>
                                     )}

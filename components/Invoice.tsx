@@ -20,9 +20,9 @@ const invoiceStyles = `
   .invoice-container { 
     max-width: 800px; 
     margin: auto; 
-    padding: 40px; 
-    border: 1px solid #e2e8f0; 
-    border-radius: 12px;
+    padding: 15px 25px; 
+    border: 1px solid #edf2f7; 
+    border-radius: 8px;
     font-family: 'Inter', -apple-system, sans-serif; 
     color: #1a202c; 
     background: #fff; 
@@ -33,80 +33,82 @@ const invoiceStyles = `
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
-    margin-bottom: 40px; 
-    border-bottom: 2px solid #f7fafc;
-    padding-bottom: 20px;
+    margin-bottom: 12px; 
+    border-bottom: 1px solid #edf2f7;
+    padding-bottom: 8px;
   }
-  .brand-details { font-size: 13px; color: #4a5568; margin-top: 8px; line-height: 1.5; }
+  .brand-details { font-size: 10px; color: #4a5568; line-height: 1.3; }
+  .brand-details p { margin: 0; }
   
   .invoice-meta { text-align: right; }
-  .invoice-id { font-size: 20px; font-weight: 700; color: #1a202c; }
-  .invoice-date { font-size: 14px; color: #718096; margin-top: 4px; }
+  .invoice-id { font-size: 14px; font-weight: 800; color: #000; text-transform: uppercase; }
+  .invoice-date { font-size: 11px; color: #718096; margin-top: 1px; }
 
   .info-grid { 
     display: grid; 
     grid-template-cols: 1fr 1fr; 
-    gap: 40px; 
-    margin-bottom: 40px; 
+    gap: 15px; 
+    margin-bottom: 15px; 
   }
-  .info-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; margin-bottom: 8px; letter-spacing: 0.5px; }
-  .info-value { font-size: 14px; color: #2d3748; line-height: 1.5; }
-  .info-value strong { color: #000000; }
+  .info-label { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #a0aec0; margin-bottom: 2px; letter-spacing: 0.5px; }
+  .info-value { font-size: 12px; color: #2d3748; line-height: 1.3; }
+  .info-value strong { color: #000; font-weight: 700; }
 
-  .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+  .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
   .invoice-table th { 
-    background: #f7fafc; 
+    background: #f8fafc; 
     text-align: left; 
-    padding: 12px 15px; 
-    font-size: 12px; 
-    font-weight: 700; 
+    padding: 6px 10px; 
+    font-size: 10px; 
+    font-weight: 800; 
     text-transform: uppercase; 
     color: #4a5568;
-    border-bottom: 2px solid #edf2f7;
+    border-bottom: 1px solid #edf2f7;
   }
-  .invoice-table td { padding: 15px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #1a202c; }
+  .invoice-table td { padding: 6px 10px; border-bottom: 1px solid #f7fafc; font-size: 12px; color: #1a202c; }
   .invoice-table .text-right { text-align: right; }
   
-  .summary-section { display: flex; justify-content: space-between; align-items: flex-end; }
+  .summary-section { display: flex; justify-content: space-between; align-items: flex-start; }
   .qr-code-section { 
     text-align: center; 
     background: #fff;
-    padding: 10px;
+    padding: 6px;
     border: 1px solid #edf2f7;
-    border-radius: 8px;
+    border-radius: 6px;
   }
-  .qr-code-label { font-size: 10px; color: #4a5568; margin-top: 6px; font-weight: 600; }
+  .qr-code-label { font-size: 8px; color: #718096; margin-top: 2px; font-weight: 700; text-transform: uppercase; }
   
-  .totals-table { width: 300px; }
-  .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; color: #2d3748; }
+  .totals-table { width: 240px; }
+  .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #4a5568; }
   .total-row.grand-total { 
-    border-top: 2px solid #edf2f7; 
-    margin-top: 10px; 
-    padding-top: 15px; 
-    font-size: 18px; 
+    border-top: 1px solid #edf2f7; 
+    margin-top: 6px; 
+    padding-top: 6px; 
+    font-size: 15px; 
     font-weight: 800; 
-    color: #000000; 
+    color: #000; 
   }
   .status-badge { 
     display: inline-block; 
-    padding: 4px 12px; 
-    border-radius: 99px; 
-    font-size: 12px; 
-    font-weight: 700; 
-    margin-top: 10px;
+    padding: 1px 8px; 
+    border-radius: 4px; 
+    font-size: 9px; 
+    font-weight: 800; 
+    margin-top: 4px;
+    text-transform: uppercase;
   }
   .status-unpaid { background: #fff5f5; color: #c53030; }
   .status-paid { background: #f0fff4; color: #2f855a; }
   .status-partial { background: #fffaf0; color: #c05621; }
 
   .invoice-footer { 
-    margin-top: 60px; 
-    padding-top: 20px; 
-    border-top: 1px solid #edf2f7; 
+    margin-top: 25px; 
+    padding-top: 10px; 
+    border-top: 1px solid #f7fafc; 
     text-align: center; 
   }
-  .thanks-msg { font-size: 16px; font-weight: 700; color: #1a202c; margin-bottom: 5px; }
-  .terms { font-size: 12px; color: #718096; }
+  .thanks-msg { font-size: 12px; font-weight: 800; color: #000; margin-bottom: 1px; }
+  .terms { font-size: 10px; color: #a0aec0; }
 
   @media print {
     .invoice-container { 
@@ -161,16 +163,16 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
     return 'status-unpaid';
   };
 
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=EKO-INV-${sale.id.substring(0,8)}&color=0-0-0&bgcolor=255-255-255&margin=1`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=EKO-INV-${sale.id.substring(0,8)}&color=0-0-0&bgcolor=255-255-255&margin=1`;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Invoice Detail`}>
       <style>{invoiceStyles}</style>
-      <div className="bg-gray-50 p-2 sm:p-4 rounded-lg overflow-x-hidden">
-        <div className="invoice-container shadow-sm mx-auto bg-white" ref={invoiceRef}>
+      <div className="bg-gray-100 p-2 sm:p-4 rounded-xl overflow-x-hidden">
+        <div className="invoice-container shadow-md mx-auto bg-white" ref={invoiceRef}>
             <div className="invoice-header">
-                <div className="flex items-center gap-6">
-                    <Logo className="h-24" showTagline={true} />
+                <div className="flex items-center gap-4">
+                    <Logo className="h-12" showTagline={false} />
                     <div className="brand-details">
                         <p><strong>Email:</strong> ekoprints256@gmail.com</p>
                         <p><strong>Tel:</strong> 0792832056 / 0703580516</p>
@@ -178,29 +180,28 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
                     </div>
                 </div>
                 <div className="invoice-meta">
-                    <div className="invoice-id">INVOICE #{sale.id.substring(0, 8).toUpperCase()}</div>
-                    <div className="invoice-date">Date Issued: {new Date(sale.date).toLocaleDateString()}</div>
+                    <div className="invoice-id">INV-#{sale.id.substring(0, 8).toUpperCase()}</div>
+                    <div className="invoice-date">Issued: {new Date(sale.date).toLocaleDateString()}</div>
                     <div className={`status-badge ${getStatusClass()}`}>
-                        {sale.status.toUpperCase()}
+                        {sale.status}
                     </div>
                 </div>
             </div>
 
             <div className="info-grid">
                 <div>
-                    <div className="info-label">Billed To</div>
+                    <div className="info-label">Client Details</div>
                     <div className="info-value">
                         <strong>{sale.customer.name}</strong><br />
-                        {sale.customer.phone && <>{sale.customer.phone}<br /></>}
-                        {sale.customer.email && <>{sale.customer.email}<br /></>}
-                        {sale.customer.address}
+                        {sale.customer.phone && <span className="text-gray-500">{sale.customer.phone}</span>}
+                        {sale.customer.address && <div className="text-[10px] text-gray-500 mt-0.5">{sale.customer.address}</div>}
                     </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                    <div className="info-label">Payment Information</div>
+                    <div className="info-label">Payment Terms</div>
                     <div className="info-value">
-                        Method: Cash / Mobile Money<br />
-                        Currency: UGX
+                        Method: Cash / MM<br />
+                        Currency: <span className="font-bold">UGX</span>
                     </div>
                 </div>
             </div>
@@ -208,19 +209,19 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
             <table className="invoice-table">
                 <thead>
                     <tr>
-                        <th>Item Description</th>
+                        <th>Description</th>
                         <th className="text-right">Qty</th>
                         <th className="text-right">Price</th>
-                        <th className="text-right">Amount</th>
+                        <th className="text-right">Total</th>
                     </tr>
                 </thead>
                 <tbody>
                     {sale.items.map((item, index) => (
                         <tr key={index}>
-                            <td>{item.name}</td>
+                            <td className="font-medium">{item.name}</td>
                             <td className="text-right">{item.quantity}</td>
-                            <td className="text-right">{formatUGX(item.price).replace(' UGX', '')}</td>
-                            <td className="text-right">{formatUGX(item.price * item.quantity)}</td>
+                            <td className="text-right text-gray-500">{formatUGX(item.price).replace(' UGX', '')}</td>
+                            <td className="text-right font-bold">{formatUGX(item.price * item.quantity)}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -228,43 +229,43 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
 
             <div className="summary-section">
                 <div className="qr-code-section">
-                    <img src={qrCodeUrl} alt="Invoice QR Code" width="120" height="120" className="mx-auto block" style={{ imageRendering: 'pixelated' }} />
-                    <div className="qr-code-label">VERIFY INVOICE</div>
+                    <img src={qrCodeUrl} alt="Invoice QR Code" width="60" height="60" className="mx-auto block" />
+                    <div className="qr-code-label">Verification</div>
                 </div>
                 <div className="totals-table">
                     <div className="total-row">
-                        <span style={{color: '#4a5568'}}>Subtotal</span>
-                        <span style={{fontWeight: 600, color: '#1a202c'}}>{formatUGX(sale.total)}</span>
+                        <span>Subtotal</span>
+                        <span>{formatUGX(sale.total)}</span>
                     </div>
-                    <div className="total-row">
-                        <span style={{color: '#2f855a', fontWeight: 600}}>Amount Paid</span>
-                        <span style={{color: '#2f855a', fontWeight: 600}}>{formatUGX(paid)}</span>
+                    <div className="total-row" style={{ color: '#2f855a' }}>
+                        <span>Amount Paid</span>
+                        <span>{formatUGX(paid)}</span>
                     </div>
                     {balance > 0 && (
-                        <div className="total-row">
-                            <span style={{color: '#c53030', fontWeight: 600}}>Balance Due</span>
-                            <span style={{color: '#c53030', fontWeight: 600}}>{formatUGX(balance)}</span>
+                        <div className="total-row" style={{ color: '#c53030', fontWeight: 'bold' }}>
+                            <span>Balance Due</span>
+                            <span>{formatUGX(balance)}</span>
                         </div>
                     )}
                     <div className="total-row grand-total">
-                        <span>Total Due</span>
+                        <span>Total Payable</span>
                         <span>{formatUGX(sale.total)}</span>
                     </div>
                 </div>
             </div>
 
             <div className="invoice-footer">
-                <p className="thanks-msg">Thanks for the purchase!</p>
-                <p className="terms">Goods once sold are not returnable. Thank you for choosing Eko Prints.</p>
+                <p className="thanks-msg">Thank you for your business!</p>
+                <p className="terms">Goods once sold are not returnable. Official receipt issued upon full payment.</p>
             </div>
         </div>
       </div>
       
-      <div className="mt-6 flex justify-between items-center px-4">
-        <p className="text-xs text-gray-500 italic">This is a system generated document.</p>
-        <button onClick={handlePrint} className="flex items-center bg-blue-600 text-white px-6 py-2.5 rounded-xl shadow-lg hover:bg-blue-700 transition-all transform hover:-translate-y-1 font-bold">
-          <PrintIcon className="w-5 h-5 mr-2" />
-          Print Professional Invoice
+      <div className="mt-4 flex justify-between items-center px-4">
+        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Digital Copy - Generated by Eko System</p>
+        <button onClick={handlePrint} className="flex items-center bg-gray-900 text-yellow-400 px-6 py-2.5 rounded-xl shadow-xl hover:bg-black transition-all transform hover:-translate-y-0.5 font-black uppercase text-xs tracking-widest">
+          <PrintIcon className="w-4 h-4 mr-2" />
+          Export to PDF
         </button>
       </div>
     </Modal>

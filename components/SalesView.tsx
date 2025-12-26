@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment } from '../types';
 import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
@@ -30,8 +31,149 @@ const formatUGX = (amount: number) => {
 };
 
 /**
- * Custom Searchable Select for Materials Logging (Reuse logic for consistency)
+ * Custom Searchable Select for Customers with "Add New" feature
  */
+const SearchableCustomerSelect: React.FC<{
+    customers: Customer[];
+    value: string;
+    onChange: (id: string) => void;
+    onAddNew: (name: string, phone: string, address: string) => Promise<void>;
+}> = ({ customers, value, onChange, onAddNew }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+    
+    // Quick Add optional fields
+    const [quickPhone, setQuickPhone] = useState('');
+    const [quickAddress, setQuickAddress] = useState('');
+    
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filtered = useMemo(() => {
+        if (!search) return customers;
+        const s = search.toLowerCase();
+        return customers.filter(c => 
+            c.name.toLowerCase().includes(s) || 
+            c.phone?.toLowerCase().includes(s)
+        );
+    }, [customers, search]);
+
+    const selectedCustomer = customers.find(c => c.id === value);
+
+    const handleCreateNew = async () => {
+        if (!search.trim()) return;
+        setIsCreating(true);
+        await onAddNew(search.trim(), quickPhone.trim(), quickAddress.trim());
+        setIsCreating(false);
+        setSearch('');
+        setQuickPhone('');
+        setQuickAddress('');
+        setIsOpen(false);
+    };
+
+    const inputStyle = "w-full px-3 py-2 text-xs text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-yellow-400 bg-white placeholder-gray-300 font-bold";
+
+    return (
+        <div className="relative" ref={wrapperRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between w-full p-3 border border-gray-200 rounded-xl bg-white text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all shadow-sm"
+            >
+                <span className="truncate">
+                    {selectedCustomer ? selectedCustomer.name : "Select Customer..."}
+                </span>
+                <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-[100] w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                    <div className="p-3 bg-gray-50 border-b border-gray-100">
+                        <div className="relative">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                className="w-full pl-10 pr-4 py-2 text-sm text-black border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white"
+                                placeholder="Search by name or phone..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <ul className="max-h-60 overflow-auto py-2 scrollbar-thin">
+                        {filtered.length > 0 ? (
+                            filtered.map(c => (
+                                <li
+                                    key={c.id}
+                                    onClick={() => {
+                                        onChange(c.id);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    className="px-4 py-3 text-sm text-black hover:bg-yellow-50 cursor-pointer flex flex-col"
+                                >
+                                    <span className="font-bold">{c.name}</span>
+                                    {c.phone && <span className="text-[10px] text-gray-400 uppercase font-bold">{c.phone}</span>}
+                                </li>
+                            ))
+                        ) : search ? (
+                            <li className="p-4 space-y-3 bg-gray-50/50">
+                                <div className="text-center">
+                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3">Customer Not Found</p>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <div>
+                                        <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Phone (Optional)</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. 0700 000 000" 
+                                            value={quickPhone} 
+                                            onChange={e => setQuickPhone(e.target.value)}
+                                            className={inputStyle}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Address (Optional)</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. Kampala, Uganda" 
+                                            value={quickAddress} 
+                                            onChange={e => setQuickAddress(e.target.value)}
+                                            className={inputStyle}
+                                        />
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleCreateNew}
+                                    disabled={isCreating}
+                                    className="w-full bg-yellow-400 text-gray-900 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-md active:scale-95"
+                                >
+                                    {isCreating ? 'Registering...' : `Register "${search}" as New`}
+                                </button>
+                            </li>
+                        ) : (
+                            <li className="px-4 py-8 text-center text-xs text-gray-400 font-bold uppercase tracking-widest">Type to start searching</li>
+                        )}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SearchableMaterialSelect: React.FC<{
     items: StockItem[];
     value: string;
@@ -179,6 +321,23 @@ const SalesView: React.FC<SalesViewProps> = ({
     setCustomerId('');
     setAmountPaid(0);
     setIsAddSaleOpen(false);
+  };
+
+  const handleQuickAddCustomer = async (name: string, phone: string, address: string) => {
+    try {
+        const newCustomer = await onAddCustomer({
+            name,
+            email: `${name.toLowerCase().replace(/\s+/g, '.')}@guest.com`,
+            phone: phone || '',
+            address: address || ''
+        });
+        if (newCustomer) {
+            setCustomerId(newCustomer.id);
+            addToast(`Customer "${name}" registered and selected.`, 'success');
+        }
+    } catch (e) {
+        addToast("Failed to quickly register customer.", "error");
+    }
   };
 
   const handleOpenPayment = (sale: Sale) => {
@@ -522,15 +681,12 @@ const SalesView: React.FC<SalesViewProps> = ({
         <div className="space-y-6">
           <div>
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Assign Customer</label>
-            <select 
-                value={customerId} 
-                onChange={e => setCustomerId(e.target.value)} 
-                className="w-full p-3 border border-gray-200 rounded-xl bg-white text-black font-bold focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all" 
-                required
-            >
-                <option value="">Select Customer...</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchableCustomerSelect 
+                customers={customers}
+                value={customerId}
+                onChange={setCustomerId}
+                onAddNew={handleQuickAddCustomer}
+            />
           </div>
 
           <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-3">

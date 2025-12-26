@@ -2,7 +2,8 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
 import { Sale, Expense, StockItem, User, SaleItem } from '../types';
-import { AlertTriangleIcon, BeakerIcon, ChevronDownIcon, SearchIcon } from './icons';
+// Add missing icon imports from icons.tsx
+import { AlertTriangleIcon, BeakerIcon, ChevronDownIcon, SearchIcon, SalesIcon, ExpensesIcon, BanknotesIcon, InventoryIcon } from './icons';
 import Modal from './Modal';
 import { useToast } from '../App';
 
@@ -62,7 +63,7 @@ const SearchableMaterialSelect: React.FC<{
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between w-full px-3 py-2 text-sm text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-black"
+                className="flex items-center justify-between w-full px-3 py-2 text-sm text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-black font-bold"
             >
                 <span className="truncate">
                     {selectedItem ? `${selectedItem.width}m | ${selectedItem.itemName}` : "Select Material Roll..."}
@@ -131,10 +132,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
       return sales.filter(isLoggable);
   }, [sales]);
   
-  // Filter data based on role for stats
   const { relevantSales, relevantExpenses } = useMemo(() => {
       const today = new Date().toDateString();
-      
       if (currentUser.role === 'admin') {
           return { relevantSales: sales, relevantExpenses: expenses };
       } else {
@@ -156,19 +155,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
     .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map(s => ({ name: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric'}), sales: s.total }));
     
-  const lowStockItems = stockItems.filter(item => {
-    const stock = item.totalStockMeters || 0;
-    return stock <= item.reorderLevel;
-  });
+  const lowStockItems = stockItems.filter(item => (item.totalStockMeters || 0) <= item.reorderLevel);
 
   const StatCard = ({ title, value, colorClass, icon }: { title: string; value: string; colorClass: string, icon: React.ReactNode}) => (
-    <div className="bg-white p-5 rounded-lg shadow-sm flex items-center space-x-4 border border-gray-100">
-        <div className={`p-3 rounded-full ${colorClass}`}>
+    <div className="bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex items-center space-x-5 border border-gray-50 group hover:shadow-xl transition-all duration-300">
+        <div className={`p-4 rounded-2xl ${colorClass} group-hover:scale-110 transition-transform`}>
           {icon}
         </div>
         <div>
-            <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-            <p className="text-2xl font-bold text-black">{value}</p>
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{title}</h3>
+            <p className="text-xl font-black text-gray-900 mt-1">{value}</p>
         </div>
     </div>
   );
@@ -176,145 +172,124 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
   const handleOpenUsageModal = (sale: Sale) => {
       setSaleForUsage(sale);
       const initialEntries: {[key: string]: { skuId: string, meters: number }} = {};
-      
       sale.items.forEach((item, index) => {
           const lowerName = item.name.toLowerCase();
           if (lowerName.includes('print') || lowerName.includes('roll') || lowerName.includes('dtf') || lowerName.includes('banner')) {
               const match = stockItems.find(s => lowerName.includes(s.itemName.split(' ')[0].toLowerCase()));
-              initialEntries[index] = { 
-                  skuId: match?.skuId || '', 
-                  meters: 0
-              };
+              initialEntries[index] = { skuId: match?.skuId || '', meters: 0 };
           }
       });
-      
       setUsageEntries(initialEntries);
       setIsUsageModalOpen(true);
   };
 
   const handleSaveUsage = async () => {
     if (!saleForUsage) return;
-    
     let processedCount = 0;
-    const entries = Object.entries(usageEntries) as [string, { skuId: string, meters: number }][];
-    
-    for (const [index, entry] of entries) {
+    for (const [index, entry] of Object.entries(usageEntries)) {
         if (entry.skuId && entry.meters > 0) {
             const item = saleForUsage.items[parseInt(index)];
-            await onStockOut(
-                entry.skuId, 
-                entry.meters, 
-                `Invoice #${saleForUsage.id.substring(0,8)}`, 
-                `Usage for ${item.name}`
-            );
+            await onStockOut(entry.skuId, entry.meters, `Invoice #${saleForUsage.id.substring(0,8)}`, `Usage for ${item.name}`);
             processedCount++;
         }
     }
-
     if (processedCount > 0) {
-        await onUpdateSale({
-            ...saleForUsage,
-            usageLogged: true
-        });
+        await onUpdateSale({ ...saleForUsage, usageLogged: true });
         addToast(`Inventory updated and log recorded for ${processedCount} items.`, "success");
-    } else {
-        addToast("No valid usage entries were recorded.", "info");
     }
-    
     setIsUsageModalOpen(false);
     setSaleForUsage(null);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-7xl mx-auto">
       <style>{`
-        @keyframes pulse-red {
+        @keyframes pulse-soft {
           0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-          70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+          70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
           100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
-        .animate-pulse-red {
-          animation: pulse-red 2s infinite;
+        .animate-pulse-soft {
+          animation: pulse-soft 2.5s infinite;
         }
       `}</style>
 
-      {/* Persistent Blinking Action Alert for Logs */}
       {pendingLogs.length > 0 && (
-        <div className="bg-red-50 border-2 border-red-500 rounded-xl p-4 sm:p-6 shadow-xl animate-pulse-red relative overflow-hidden group">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
-                <div className="flex items-center">
-                    <div className="bg-red-500 p-3 rounded-full mr-4 text-white">
-                        <BeakerIcon className="w-8 h-8" />
-                    </div>
-                    <div>
-                        <h3 className="text-red-800 font-extrabold text-lg sm:text-xl uppercase tracking-tight">Pending Usage Logs Found!</h3>
-                        <p className="text-red-600 font-semibold">There are <span className="underline">{pendingLogs.length}</span> sales awaiting machine printing logs. Accuracy of your stock depends on this.</p>
-                    </div>
+        <div className="bg-red-50 border-2 border-red-500 rounded-3xl p-6 shadow-2xl animate-pulse-soft relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center z-10">
+                <div className="bg-red-500 p-4 rounded-2xl mr-5 text-white shadow-lg">
+                    <BeakerIcon className="w-10 h-10" />
                 </div>
-                <div className="flex flex-col gap-2 w-full sm:w-auto">
-                    <button 
-                        onClick={() => handleOpenUsageModal(pendingLogs[0])}
-                        className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center"
-                    >
-                        Log Most Recent Now
-                    </button>
-                    {pendingLogs.length > 1 && (
-                        <p className="text-xs text-red-400 text-center font-bold">And {pendingLogs.length - 1} other invoices pending...</p>
-                    )}
+                <div>
+                    <h3 className="text-red-900 font-black text-xl uppercase tracking-tight">Attention: Usage Logs Pending</h3>
+                    <p className="text-red-600 font-bold text-sm">Action required for <span className="underline decoration-2">{pendingLogs.length}</span> invoices to maintain stock accuracy.</p>
                 </div>
             </div>
-            <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity">
-                 <BeakerIcon className="w-32 h-32 -mr-8 -mt-8 rotate-12" />
-            </div>
+            <button 
+                onClick={() => handleOpenUsageModal(pendingLogs[0])}
+                className="bg-red-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center uppercase tracking-widest text-xs z-10 shrink-0"
+            >
+                Log Recent Transaction
+            </button>
+            <BeakerIcon className="absolute right-0 bottom-0 w-32 h-32 text-red-500 opacity-5 -mr-8 -mb-8 rotate-12" />
         </div>
       )}
 
-      <h2 className="text-lg font-semibold text-black">{currentUser.role === 'admin' ? 'Overview' : 'Your Daily Summary'}</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{currentUser.role === 'admin' ? 'Enterprise Dashboard' : 'Your Day At A Glance'}</h2>
+        <span className="text-[10px] font-black bg-gray-100 text-gray-400 px-4 py-1.5 rounded-full tracking-[0.2em] uppercase">{new Date().toDateString()}</span>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title={currentUser.role === 'admin' ? "Total Revenue" : "Your Sales Today"} value={formatUGX(totalRevenue)} colorClass="bg-green-100 text-green-600" icon={<svg className="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
-        <StatCard title={currentUser.role === 'admin' ? "Total Expenses" : "Your Expenses Today"} value={formatUGX(totalExpenses)} colorClass="bg-red-100 text-red-600" icon={<svg className="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
-        <StatCard title={currentUser.role === 'admin' ? "Net Profit" : "Net Sales"} value={formatUGX(netProfit)} colorClass="bg-blue-100 text-blue-600" icon={<svg className="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>}/>
+        <StatCard title={currentUser.role === 'admin' ? "Gross Revenue" : "Sales Today"} value={formatUGX(totalRevenue)} colorClass="bg-emerald-50 text-emerald-600" icon={<SalesIcon className="w-6 h-6" />}/>
+        <StatCard title={currentUser.role === 'admin' ? "Expenditure" : "Expenses Today"} value={formatUGX(totalExpenses)} colorClass="bg-rose-50 text-rose-600" icon={<ExpensesIcon className="w-6 h-6" />}/>
+        <StatCard title={currentUser.role === 'admin' ? "Net Earnings" : "Net Sales"} value={formatUGX(netProfit)} colorClass="bg-sky-50 text-sky-600" icon={<BanknotesIcon className="w-6 h-6" />}/>
         {currentUser.role === 'admin' && (
-            <StatCard title="Materials Value" value={formatUGX(totalMaterialsValue)} colorClass="bg-purple-100 text-purple-600" icon={<svg className="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.1.25-.504-1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>}/>
+            <StatCard title="Inventory Value" value={formatUGX(totalMaterialsValue)} colorClass="bg-indigo-50 text-indigo-600" icon={<InventoryIcon className="w-6 h-6" />}/>
         )}
       </div>
       
        {lowStockItems.length > 0 && (
-            <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-yellow-400 slide-in-up">
-                <h3 className="text-lg font-semibold text-yellow-600 mb-4 flex items-center">
-                    <AlertTriangleIcon className="w-6 h-6 mr-3" /> Low Stock Alerts
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {lowStockItems.map(item => (
-                        <div key={item.skuId} className="flex justify-between items-center p-2 rounded-md bg-yellow-50">
-                            <span className="font-medium text-black">{item.itemName}</span>
-                            <span className="text-sm text-yellow-700">
-                                In Stock: <strong>{(item.totalStockMeters || 0).toFixed(1)}m</strong> (Reorder at: {item.reorderLevel}m)
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-l-8 border-yellow-400">
+                <div className="flex items-center mb-6">
+                    <div className="p-3 bg-yellow-100 rounded-xl mr-4 text-yellow-700">
+                        <AlertTriangleIcon className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Replenishment Alerts</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {lowStockItems.slice(0, 6).map(item => (
+                        <div key={item.skuId} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="font-black text-gray-800 text-xs uppercase truncate pr-4">{item.itemName}</span>
+                            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded">
+                                {(item.totalStockMeters || 0).toFixed(1)}m Left
                             </span>
                         </div>
                     ))}
+                    {lowStockItems.length > 6 && <p className="text-[10px] text-gray-400 font-black uppercase text-center py-2">+ {lowStockItems.length - 6} more alerts</p>}
                 </div>
             </div>
         )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 bg-white p-6 rounded-lg shadow-sm">
-           <h3 className="text-lg font-semibold text-black mb-4">Sales Overview ({currentUser.role === 'admin' ? 'All Time' : 'Today'})</h3>
-           <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" stroke="#000" />
-                    <YAxis tickFormatter={(val) => new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(val)} stroke="#000" />
-                    <Tooltip formatter={(value: number) => formatUGX(value)} contentStyle={{ color: 'black' }} />
-                    <Legend />
-                    <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} activeDot={{ r: 8 }} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] shadow-xl border border-gray-50">
+           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-8">Revenue Trajectory</h3>
+           <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={salesData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} tick={{dy: 10}} />
+                    <YAxis tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} stroke="#94a3b8" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
+                    <Tooltip 
+                        contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '12px' }}
+                        itemStyle={{ color: '#0f172a', fontWeight: 900, fontSize: '12px' }}
+                    />
+                    <Line type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                 </LineChart>
            </ResponsiveContainer>
         </div>
-        <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm">
-           <h3 className="text-lg font-semibold text-black mb-4">Top Selling Products</h3>
-            <div className="space-y-4">
+        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-50">
+           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-8">Performance Leaderboard</h3>
+            <div className="space-y-6">
             {
                 relevantSales.flatMap(s => s.items)
                     .reduce((acc, item) => {
@@ -329,56 +304,64 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
                     }, [] as {itemId: string, name: string, quantity: number, price: number}[])
                     .sort((a, b) => b.price - a.price)
                     .slice(0, 5)
-                    .map(item => (
-                    <div key={item.itemId} className="flex items-center justify-between">
-                        <span className="text-black text-sm">{item.name}</span>
-                        <span className="font-bold text-black text-sm">{formatUGX(item.price)}</span>
+                    .map((item, idx) => (
+                    <div key={item.itemId} className="flex items-center justify-between group">
+                        <div className="flex items-center">
+                            <span className="w-6 h-6 flex items-center justify-center bg-gray-900 text-white rounded-lg text-[10px] font-black mr-4">{idx + 1}</span>
+                            <div>
+                                <p className="text-xs font-black text-gray-800 uppercase tracking-tighter truncate max-w-[140px]">{item.name}</p>
+                                <p className="text-[9px] text-gray-400 font-bold">{item.quantity} Units Sold</p>
+                            </div>
+                        </div>
+                        <span className="font-black text-gray-900 text-xs">{formatUGX(item.price)}</span>
                     </div>
                 ))
             }
-            {relevantSales.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No sales data available.</p>}
+            {relevantSales.length === 0 && <p className="text-sm text-gray-300 text-center py-20 font-bold italic">No transactional data yet</p>}
             </div>
         </div>
       </div>
 
-      <Modal isOpen={isUsageModalOpen} onClose={() => setIsUsageModalOpen(false)} title="Log Machine Printing Usage">
-          <div className="space-y-6">
-              <p className="text-sm text-gray-600">
-                  Select the material roll used and enter the actual machine printed length (meters) for <strong>Invoice #{saleForUsage?.id.substring(0,8)}</strong>.
-              </p>
+      <Modal isOpen={isUsageModalOpen} onClose={() => setIsUsageModalOpen(false)} title="Machine Production Log">
+          <div className="space-y-8">
+              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                  <p className="text-xs text-blue-900 font-bold leading-relaxed">
+                      Confirm machine output for <strong>Invoice #{saleForUsage?.id.substring(0,8).toUpperCase()}</strong>. Accurate logging ensures inventory levels match actual usage.
+                  </p>
+              </div>
               
-              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+              <div className="overflow-x-auto border border-gray-100 rounded-2xl">
                   <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[10px]">
+                      <thead className="bg-gray-50 text-gray-400 font-black uppercase text-[10px] tracking-widest">
                           <tr>
-                              <th className="px-4 py-3">Invoice Item</th>
-                              <th className="px-4 py-3">Inventory Material (Rolls)</th>
-                              <th className="px-4 py-3 text-right">Meters Printed</th>
+                              <th className="px-6 py-4">Item</th>
+                              <th className="px-6 py-4">Source Material</th>
+                              <th className="px-6 py-4 text-right">Consumption (m)</th>
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100">
                           {saleForUsage?.items.map((item, index) => {
                               const isPrintItem = item.name.toLowerCase().includes('print') || item.name.toLowerCase().includes('roll') || item.name.toLowerCase().includes('dtf') || item.name.toLowerCase().includes('banner');
                               if (!isPrintItem) return null;
                               
                               return (
                                   <tr key={index}>
-                                      <td className="px-4 py-3 font-medium text-black">{item.name}</td>
-                                      <td className="px-4 py-3">
+                                      <td className="px-6 py-4 font-black text-gray-800 text-xs uppercase">{item.name}</td>
+                                      <td className="px-6 py-4">
                                           <SearchableMaterialSelect 
                                             items={stockItems}
                                             value={usageEntries[index]?.skuId || ''}
                                             onChange={(skuId) => setUsageEntries(prev => ({ ...prev, [index]: { ...prev[index], skuId } }))}
                                           />
                                       </td>
-                                      <td className="px-4 py-3 text-right">
+                                      <td className="px-6 py-4 text-right">
                                           <input 
                                             type="number" 
                                             step="0.01"
                                             value={usageEntries[index]?.meters || ''} 
-                                            placeholder="0.0"
+                                            placeholder="0.00"
                                             onChange={e => setUsageEntries(prev => ({ ...prev, [index]: { ...prev[index], meters: parseFloat(e.target.value) || 0 } }))}
-                                            className="block w-20 ml-auto text-right text-xs rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 font-mono font-bold text-black"
+                                            className="block w-24 ml-auto text-right text-xs rounded-xl border-gray-300 shadow-inner focus:ring-2 focus:ring-blue-500 font-black text-blue-600 p-3"
                                           />
                                       </td>
                                   </tr>
@@ -388,12 +371,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
                   </table>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-gray-100">
-                  <button onClick={() => setIsUsageModalOpen(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800 mr-4 font-medium">Cancel</button>
-                  <button onClick={handleSaveUsage} className="bg-purple-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-purple-700 font-bold transition-all transform hover:scale-105">
-                      Save & Complete Usage Log
-                  </button>
-              </div>
+              <button 
+                onClick={handleSaveUsage} 
+                className="w-full bg-[#0f172a] text-yellow-400 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 border border-yellow-400/20"
+              >
+                Submit Usage Log & Re-calculate Stock
+              </button>
           </div>
       </Modal>
     </div>

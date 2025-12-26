@@ -2,19 +2,13 @@
 import React from 'react';
 import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon } from './icons';
 import { User } from '../types';
+import Logo from './Logo';
 
 interface SidebarProps {
     activeView: string;
     setActiveView: (view: string) => void;
     currentUser: User;
 }
-
-const EkoPrintsLogo = () => (
-    <div className="flex items-center justify-center p-6 bg-[#1A2232] border-b border-gray-700">
-        <span className="text-3xl font-bold tracking-tighter text-white">Eko</span>
-        <span className="text-3xl font-bold text-yellow-400 ml-1">Prints</span>
-    </div>
-);
 
 const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{className?: string}>, name: string, isActive: boolean, onClick: () => void }) => (
     <button
@@ -49,7 +43,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
         { name: 'Expenses', icon: ExpensesIcon },
     ];
 
-    // Allow Bankers to see Reports to check Total Income
     if (currentUser.isBanker) {
         userNavItems.push({ name: 'Reports', icon: ReportsIcon });
     }
@@ -58,7 +51,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
 
     return (
         <aside className="w-64 bg-[#1A2232] text-white flex-shrink-0 flex-col hidden md:flex">
-            <EkoPrintsLogo />
+            <div className="flex items-center justify-center p-4 bg-[#1A2232] border-b border-gray-700">
+                {/* Remove unsupported 'variant' prop to fix type error */}
+                <Logo className="h-16" />
+            </div>
             <nav className="flex-1 mt-6">
                 <ul className="space-y-2">
                     {navItems.map((item) => (

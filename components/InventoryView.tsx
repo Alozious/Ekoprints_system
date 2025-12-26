@@ -722,46 +722,91 @@ const PricingSetupView: React.FC<SetupViewProps> = ({ materialCategories, pricin
     const [tierName, setTierName] = useState('');
     const [value, setValue] = useState(0);
 
+    const groupedTiers = useMemo(() => {
+        const groups: Record<string, PricingTier[]> = {};
+        
+        pricingTiers.forEach(tier => {
+            const catId = tier.categoryId || 'uncategorized';
+            if (!groups[catId]) groups[catId] = [];
+            groups[catId].push(tier);
+        });
+
+        // Sort groups: materialCategories order first, then uncategorized
+        const sortedGroups: { id: string, name: string, tiers: PricingTier[] }[] = [];
+        
+        materialCategories.forEach(cat => {
+            if (groups[cat.id]) {
+                sortedGroups.push({ id: cat.id, name: cat.name, tiers: groups[cat.id] });
+                delete groups[cat.id];
+            }
+        });
+
+        if (groups['uncategorized']) {
+            sortedGroups.push({ id: 'uncategorized', name: 'Uncategorized', tiers: groups['uncategorized'] });
+        }
+
+        return sortedGroups;
+    }, [pricingTiers, materialCategories]);
+
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-black">Pricing Tiers (UGX per CM²)</h3>
-                <button onClick={() => setIsAddTierModalOpen(true)} className="text-blue-600 flex items-center text-sm font-bold"><PlusIcon className="w-4 h-4 mr-1"/> Add Tier</button>
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Pricing Tiers (UGX per CM²)</h3>
+                <button onClick={() => setIsAddTierModalOpen(true)} className="text-blue-600 flex items-center text-xs font-black uppercase tracking-tighter hover:underline"><PlusIcon className="w-4 h-4 mr-1"/> Add Tier</button>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-700">
-                        <tr>
-                            <th className="px-4 py-3">Tier Name</th>
-                            <th className="px-4 py-3">Category</th>
-                            <th className="px-4 py-3 text-right">Value (UGX/cm²)</th>
-                            <th className="px-4 py-3 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pricingTiers.map(tier => (
-                            <tr key={tier.id} className="border-b">
-                                <td className="px-4 py-3 font-bold text-black">{tier.name}</td>
-                                <td className="px-4 py-3 text-black">{materialCategories.find(c => c.id === tier.categoryId)?.name}</td>
-                                <td className="px-4 py-3 text-right font-mono text-black">{(tier.value || 0).toFixed(4)}</td>
-                                <td className="px-4 py-3 text-right">
-                                    <button onClick={() => { const v = prompt('New value:', String(tier.value)); if(v) onUpdateTier(tier.id, tier.name, parseFloat(v)); }} className="text-blue-600 mr-2"><EditIcon className="w-4 h-4"/></button>
-                                    <button onClick={() => onDeleteTier(tier.id)} className="text-red-600"><TrashIcon className="w-4 h-4"/></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            
+            <div className="space-y-8">
+                {groupedTiers.map(group => (
+                    <div key={group.id} className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-[1px] flex-1 bg-gray-100"></div>
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{group.name}</h4>
+                            <div className="h-[1px] flex-1 bg-gray-100"></div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50/50 text-[10px] uppercase font-black text-gray-400 tracking-tighter">
+                                    <tr>
+                                        <th className="px-4 py-3">Tier Name</th>
+                                        <th className="px-4 py-3">Category</th>
+                                        <th className="px-4 py-3 text-right">Value (UGX/cm²)</th>
+                                        <th className="px-4 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {group.tiers.map(tier => (
+                                        <tr key={tier.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                            <td className="px-4 py-3 font-bold text-gray-900">{tier.name}</td>
+                                            <td className="px-4 py-3 text-gray-500 text-xs font-medium">{materialCategories.find(c => c.id === tier.categoryId)?.name || '-'}</td>
+                                            <td className="px-4 py-3 text-right font-mono text-gray-900 font-bold">{(tier.value || 0).toFixed(4)}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => { const v = prompt('New value:', String(tier.value)); if(v) onUpdateTier(tier.id, tier.name, parseFloat(v)); }} className="p-1.5 text-blue-500 bg-blue-50 rounded-lg hover:bg-blue-100"><EditIcon className="w-4 h-4"/></button>
+                                                    <button onClick={() => onDeleteTier(tier.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><TrashIcon className="w-4 h-4"/></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ))}
+                
+                {groupedTiers.length === 0 && (
+                    <div className="text-center py-10 text-gray-400 italic text-xs uppercase tracking-widest font-black">No pricing tiers established.</div>
+                )}
             </div>
+
             <Modal isOpen={isAddTierModalOpen} onClose={() => setIsAddTierModalOpen(false)} title="Add Pricing Tier">
                 <form onSubmit={e => { e.preventDefault(); onAddTier(tierName, value, selectedCatId); setIsAddTierModalOpen(false); }} className="space-y-4">
-                    <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className="block w-full border rounded-lg p-2 text-black" required>
-                        <option value="" className="text-black">Select Category</option>
-                        {materialCategories.map(c => <option key={c.id} value={c.id} className="text-black">{c.name}</option>)}
+                    <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className="block w-full border-none bg-[#374151] rounded-xl p-3 text-white font-bold focus:ring-2 focus:ring-yellow-400 outline-none" required>
+                        <option value="" className="text-white">Select Category</option>
+                        {materialCategories.map(c => <option key={c.id} value={c.id} className="text-white">{c.name}</option>)}
                     </select>
-                    <input type="text" value={tierName} onChange={e => setTierName(e.target.value)} className="block w-full border rounded-lg p-2 text-black" placeholder="Tier Name (e.g. Retail)" required />
-                    <input type="number" step="0.0001" value={value} onChange={e => setValue(parseFloat(e.target.value))} className="block w-full border rounded-lg p-2 text-black" placeholder="Value per CM²" required />
-                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Create Tier</button>
+                    <input type="text" value={tierName} onChange={e => setTierName(e.target.value)} className="block w-full border-none bg-[#374151] rounded-xl p-3 text-white font-bold focus:ring-2 focus:ring-yellow-400 outline-none placeholder-gray-400" placeholder="Tier Name (e.g. Retail)" required />
+                    <input type="number" step="0.0001" value={value} onChange={e => setValue(parseFloat(e.target.value))} className="block w-full border-none bg-[#374151] rounded-xl p-3 text-white font-bold focus:ring-2 focus:ring-yellow-400 outline-none placeholder-gray-400" placeholder="Value per CM²" required />
+                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-transform">Create Tier</button>
                 </form>
             </Modal>
         </div>

@@ -3,6 +3,7 @@ import React from 'react';
 import { Sale, Customer } from '../types';
 import { PrintIcon } from './icons';
 import Modal from './Modal';
+import Logo from './Logo';
 
 interface InvoiceProps {
   isOpen: boolean;
@@ -31,27 +32,10 @@ const invoiceStyles = `
   .invoice-header { 
     display: flex; 
     justify-content: space-between; 
-    align-items: flex-start; 
+    align-items: center; 
     margin-bottom: 40px; 
     border-bottom: 2px solid #f7fafc;
     padding-bottom: 20px;
-  }
-  .brand-section h1 { 
-    font-size: 28px; 
-    font-weight: 800; 
-    color: #1a2232; 
-    margin: 0; 
-    letter-spacing: -0.5px;
-  }
-  .brand-section span { color: #d97706; }
-  .brand-tagline {
-    font-size: 10px;
-    font-weight: 700;
-    color: #4a5568;
-    letter-spacing: 1.5px;
-    margin-top: -2px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
   }
   .brand-details { font-size: 13px; color: #4a5568; margin-top: 8px; line-height: 1.5; }
   
@@ -162,37 +146,12 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
       printWindow.document.write('</body></html>');
       printWindow.document.close();
       
-      const images = printWindow.document.querySelectorAll('img');
-      let loadedImages = 0;
-      const totalImages = images.length;
-
       const triggerPrint = () => {
           printWindow.focus();
-          printWindow.print();
+          setTimeout(() => printWindow.print(), 500);
       };
-
-      if (totalImages === 0) {
-          triggerPrint();
-      } else {
-          images.forEach(img => {
-              if (img.complete) {
-                  loadedImages++;
-                  if (loadedImages === totalImages) triggerPrint();
-              } else {
-                  img.onload = () => {
-                      loadedImages++;
-                      if (loadedImages === totalImages) triggerPrint();
-                  };
-                  img.onerror = () => {
-                      loadedImages++;
-                      if (loadedImages === totalImages) triggerPrint();
-                  };
-              }
-          });
-          setTimeout(() => {
-              if (loadedImages < totalImages) triggerPrint();
-          }, 2000);
-      }
+      
+      triggerPrint();
     }
   };
 
@@ -210,13 +169,12 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale }) => {
       <div className="bg-gray-50 p-2 sm:p-4 rounded-lg overflow-x-hidden">
         <div className="invoice-container shadow-sm mx-auto bg-white" ref={invoiceRef}>
             <div className="invoice-header">
-                <div className="brand-section">
-                    <h1>Eko<span>Prints</span></h1>
-                    <div className="brand-tagline">DESIGN | PRINT | BRAND</div>
+                <div className="flex items-center gap-6">
+                    <Logo className="h-24" showTagline={true} />
                     <div className="brand-details">
                         <p><strong>Email:</strong> ekoprints256@gmail.com</p>
                         <p><strong>Tel:</strong> 0792832056 / 0703580516</p>
-                        <p><strong>Location:</strong> City View Complex, Masaka City, Level 3, Room Number L3-194</p>
+                        <p><strong>Location:</strong> City View Complex, Masaka City</p>
                     </div>
                 </div>
                 <div className="invoice-meta">

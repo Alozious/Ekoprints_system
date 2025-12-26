@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment } from '../types';
 import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
@@ -106,7 +105,7 @@ const SearchableMaterialSelect: React.FC<{
                                     className="px-3 py-2 text-xs text-black hover:bg-purple-50 cursor-pointer flex justify-between"
                                 >
                                     <span><strong>{i.width}m</strong> | {i.itemName}</span>
-                                    <span className="text-gray-400 font-mono">({i.totalStockMeters.toFixed(1)}m)</span>
+                                    <span className="text-gray-400 font-mono">({(i.totalStockMeters || 0).toFixed(1)}m)</span>
                                 </li>
                             ))
                         ) : (
@@ -450,7 +449,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                         <button onClick={() => handleOpenUsageModal(sale)} className="p-2 text-red-600 hover:text-red-700 transition-colors bg-red-50 rounded-lg animate-blink" title="Log Usage (Urgent)"><BeakerIcon className="w-5 h-5" /></button>
                     )}
                     {currentUser.role === 'admin' && (
-                       <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} className="p-2 text-black hover:text-red-600 transition-colors bg-red-50 rounded-lg" title="Delete Record"><TrashIcon className="w-5 h-5" /></button>
+                       <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} className="p-2 text-black hover:text-red-600 transition-colors bg-red-50 rounded-lg" title="Delete Record"><TrashIcon className="w-4 h-4" /></button>
                     )}
                   </div>
                 </td>

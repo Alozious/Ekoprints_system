@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { MaterialCategory, StockItem, StockTransaction, PricingTier, InventoryItem, ProductCategory } from '../types';
 import Modal from './Modal';
@@ -744,7 +743,7 @@ const PricingSetupView: React.FC<SetupViewProps> = ({ materialCategories, pricin
                             <tr key={tier.id} className="border-b">
                                 <td className="px-4 py-3 font-bold text-black">{tier.name}</td>
                                 <td className="px-4 py-3 text-black">{materialCategories.find(c => c.id === tier.categoryId)?.name}</td>
-                                <td className="px-4 py-3 text-right font-mono text-black">{tier.value.toFixed(4)}</td>
+                                <td className="px-4 py-3 text-right font-mono text-black">{(tier.value || 0).toFixed(4)}</td>
                                 <td className="px-4 py-3 text-right">
                                     <button onClick={() => { const v = prompt('New value:', String(tier.value)); if(v) onUpdateTier(tier.id, tier.name, parseFloat(v)); }} className="text-blue-600 mr-2"><EditIcon className="w-4 h-4"/></button>
                                     <button onClick={() => onDeleteTier(tier.id)} className="text-red-600"><TrashIcon className="w-4 h-4"/></button>

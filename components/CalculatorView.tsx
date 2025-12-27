@@ -50,12 +50,6 @@ const CALCULATOR_TABS = [
     { id: 'others', label: 'OTHERS', type: 'manual' },
 ];
 
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-    'embroidery': ['embroidery', 't-shirt', 'shirt', 'polo', 'cap', 'uniform', 'garment', 'jumper', 'hoodie'],
-    'bizhub': ['bizhub', 'general', 'print', 'card', 'flyer', 'poster', 'book', 'document', 'paper'],
-    'supplies': ['ink', 'powder', 'solution', 'clean', 'thread', 'toner', 'material'],
-};
-
 const formatUGX = (amount: number) => {
     if (typeof amount !== 'number' || isNaN(amount)) return '0 UGX';
     return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' UGX';
@@ -171,16 +165,10 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         return Object.keys(PAPER_SIZES);
     }, [isDTF]);
 
-    // Dimension Calc Logic
+    // Dimension Calc Logic - Filtered by strict module field
     const availableStockItems = useMemo(() => {
-        if (activeTabConfig.type !== 'dimension') return [];
-        return stockItems.filter(item => {
-             const cat = materialCategories.find(c => c.id === item.categoryId);
-             const catName = cat ? cat.name.toLowerCase() : '';
-             if (isDTF) return ['dtf', 'direct to film'].some(match => catName.includes(match));
-             return !['dtf', 'direct to film'].some(match => catName.includes(match));
-        });
-    }, [stockItems, materialCategories, activeTab, activeTabConfig, isDTF]);
+        return stockItems.filter(item => item.module === activeTab);
+    }, [stockItems, activeTab]);
 
     const tiersForSelectedItem = useMemo(() => {
         if (!selectedStockItem) return [];
@@ -195,16 +183,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     }, [selectedTier, tiersForSelectedItem]);
 
     const rawCalculatedDimPrice = useMemo(() => {
-        let basePrice = 0;
-        if (isDTF) {
-            if (dtfPreset === 'A4') basePrice = 5000;
-            else if (dtfPreset === 'A3') basePrice = 10000;
-            else basePrice = lengthInMeters * 15000;
-        } else {
-            basePrice = areaInSqCm * selectedMultiplier;
+        if (isDTF && dtfPreset) {
+            if (dtfPreset === 'A4') return 5000;
+            if (dtfPreset === 'A3') return 10000;
         }
-        return Math.round(basePrice);
-    }, [areaInSqCm, selectedMultiplier, isDTF, dtfPreset, lengthInMeters]);
+        // Both Large Format and custom DTF sizes use selected tier multiplier
+        return Math.round(areaInSqCm * selectedMultiplier);
+    }, [areaInSqCm, selectedMultiplier, isDTF, dtfPreset]);
 
     useEffect(() => {
         setNegotiatedDimPrice(rawCalculatedDimPrice);
@@ -228,25 +213,12 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     }, [negotiatedDimPrice, dimQuantity, extraAmount]);
 
     const filteredProductCategories = useMemo(() => {
-        if (activeTab === 'products') return productCategories;
-        const keywords = CATEGORY_KEYWORDS[activeTab];
-        if (!keywords) return productCategories;
-        return productCategories.filter(cat => 
-            keywords.some(k => cat.name.toLowerCase().includes(k))
-        );
+        return productCategories.filter(cat => cat.module === activeTab);
     }, [productCategories, activeTab]);
 
     const filteredInventory = useMemo(() => {
-        let items = inventory;
-        if (activeTab === 'supplies') {
-            items = items.filter(i => i.isConsumable);
-        } else {
-            items = items.filter(i => !i.isConsumable);
-            const keywords = CATEGORY_KEYWORDS[activeTab];
-            if (keywords && activeTab !== 'products') {
-                items = items.filter(i => keywords.some(k => i.category.toLowerCase().includes(k) || i.name.toLowerCase().includes(k)));
-            }
-        }
+        let items = inventory.filter(item => item.module === activeTab);
+        
         if (itemSearchQuery.trim()) {
             const query = itemSearchQuery.toLowerCase();
             items = items.filter(i => 
@@ -267,7 +239,8 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     const handleAddDimToQuote = () => {
         if (!selectedStockItem) { addToast("Please select a material/roll.", "error"); return; }
-        if (!isDTF && !selectedTier) { addToast("Please select a pricing tier.", "error"); return; }
+        // Restored validation for tiers for both Large Format and custom DTF sizes
+        if (!dtfPreset && !selectedTier) { addToast("Please select a pricing tier.", "error"); return; }
         if (totalDimPrice <= 0) { addToast("Calculated price must be greater than zero.", "error"); return; }
         
         const stockItem = stockItems.find(i => i.skuId === selectedStockItem);

@@ -288,11 +288,11 @@ const App: React.FC = () => {
                                     await updateDocument('stockItems', skuId, { totalStockMeters: stockItem.totalStockMeters + metersToAdd, lastPurchasePricePerRoll_UGX: price }, setStockItems, 'Stock level updated.');
                                 }}
                                 onStockOut={handleStockOut}
-                                onAddCategory={(name) => createDocument('materialCategories', { name, isActive: true }, setMaterialCategories, 'Category created.')}
+                                onAddCategory={(name, module) => createDocument('materialCategories', { name, isActive: true, module }, setMaterialCategories, 'Category created.')}
                                 onUpdateCategory={(id, name) => updateDocument('materialCategories', id, { name }, setMaterialCategories, 'Category updated.')}
                                 onToggleCategoryStatus={(id, currentStatus) => updateDocument('materialCategories', id, { isActive: !currentStatus }, setMaterialCategories, 'Status updated.')}
                                 onDeleteCategory={(cat) => deleteDocument('materialCategories', cat.id, setMaterialCategories, 'Category deleted.')}
-                                onAddStockItem={(categoryId, width, reorderLevel, itemName) => createDocument('stockItems', { categoryId, width, reorderLevel, itemName, totalStockMeters: 0, lastPurchasePricePerRoll_UGX: 0 }, setStockItems, 'SKU created.')}
+                                onAddStockItem={(categoryId, width, reorderLevel, itemName, module) => createDocument('stockItems', { categoryId, width, reorderLevel, itemName, module, totalStockMeters: 0, lastPurchasePricePerRoll_UGX: 0 }, setStockItems, 'SKU created.')}
                                 onUpdateStockItem={(id, reorderLevel) => updateDocument('stockItems', id, { reorderLevel }, setStockItems, 'SKU updated.')}
                                 onDeleteStockItem={(id) => deleteDocument('stockItems', id, setStockItems, 'SKU deleted.')}
                                 onAddTier={(name, value, categoryId) => createDocument('pricingTiers', { name, value, categoryId }, setPricingTiers, 'Tier created.')}

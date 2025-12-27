@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { MaterialCategory, StockItem, StockTransaction, PricingTier, InventoryItem, ProductCategory } from '../types';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
-// Fix: Added InventoryIcon to imports
 import { PlusIcon, EditIcon, TrashIcon, AlertTriangleIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, BeakerIcon, InventoryIcon } from './icons';
 import { useToast } from '../App';
 
@@ -16,11 +15,11 @@ interface InventoryViewProps {
   pricingTiers: PricingTier[];
   onStockIn: (skuId: string, rolls: number, price: number, notes: string) => Promise<void>;
   onStockOut: (skuId: string, metersUsed: number, jobId: string, notes: string) => Promise<void>;
-  onAddCategory: (name: string) => Promise<void>;
+  onAddCategory: (name: string, module: string) => Promise<void>;
   onUpdateCategory: (id: string, name: string) => Promise<void>;
   onToggleCategoryStatus: (id: string, currentStatus: boolean) => Promise<void>;
   onDeleteCategory: (category: MaterialCategory) => Promise<void>;
-  onAddStockItem: (categoryId: string, width: number, reorderLevel: number, itemName: string) => Promise<void>;
+  onAddStockItem: (categoryId: string, width: number, reorderLevel: number, itemName: string, module: string) => Promise<void>;
   onUpdateStockItem: (id: string, reorderLevel: number) => Promise<void>;
   onDeleteStockItem: (id: string) => Promise<void>;
   onAddTier: (name: string, value: number, categoryId: string) => Promise<void>;
@@ -41,28 +40,14 @@ const formatUGX = (amount: number | undefined) => {
   return new Intl.NumberFormat('en-US').format(amount) + ' UGX';
 };
 
-const formatNumberWithCommas = (val: number | string) => {
-    if (val === '' || val === undefined || val === null) return '';
-    const num = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : val;
-    if (isNaN(num)) return '';
-    return new Intl.NumberFormat('en-US').format(num);
-};
-
-const parseCommaString = (val: string) => {
-    if (!val) return 0;
-    const cleaned = String(val).replace(/,/g, '');
-    return cleaned === '' ? 0 : parseFloat(cleaned);
-};
-
-// Fix: Define SetupViewProps used in setup sub-views
 interface SetupViewProps extends InventoryViewProps {
   categoryConfig: { id: string, label: string, type: string };
   filteredMaterialCategories: MaterialCategory[];
   filteredStockItems: StockItem[];
+  filteredProductCategories: ProductCategory[];
   onOpenProductTypeModal: (config: ProductCategory | null) => void;
 }
 
-// Fix: Define SetupView component to handle setup sub-routing
 const SetupView: React.FC<SetupViewProps> = (props) => {
   const { categoryConfig } = props;
   if (categoryConfig.type === 'stock') {
@@ -79,13 +64,13 @@ const SetupView: React.FC<SetupViewProps> = (props) => {
   return (
     <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Product Categories</h3>
+        <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} Setup</h3>
         <button onClick={() => props.onOpenProductTypeModal(null)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
           <PlusIcon className="w-4 h-4 mr-2"/> Add Category
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {props.productCategories.map(cat => (
+        {props.filteredProductCategories.map(cat => (
           <div key={cat.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
             <span className="font-black text-[11px] text-gray-900 uppercase tracking-tight">{cat.name}</span>
             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -94,26 +79,31 @@ const SetupView: React.FC<SetupViewProps> = (props) => {
             </div>
           </div>
         ))}
+        {props.filteredProductCategories.length === 0 && <p className="col-span-full text-center py-6 text-gray-300 font-bold italic text-xs">No unit categories established for this module</p>}
       </div>
     </div>
   );
 };
 
-// Fix: Define ConfigModalContent component for ProductCategory configuration
-const ConfigModalContent: React.FC<{ initialData: ProductCategory | null, onSave: (data: Partial<ProductCategory>) => Promise<void> }> = ({ initialData, onSave }) => {
+const ConfigModalContent: React.FC<{ initialData: ProductCategory | null, module: string, onSave: (data: Partial<ProductCategory>) => Promise<void> }> = ({ initialData, module, onSave }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [field1, setField1] = useState(initialData?.field1 || '');
   const [field2, setField2] = useState(initialData?.field2 || '');
   const [field3, setField3] = useState(initialData?.field3 || '');
+  const [field4, setField4] = useState(initialData?.field4 || '');
 
   const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
   const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
 
   return (
-    <form onSubmit={e => { e.preventDefault(); onSave({ name, field1, field2, field3 }); }} className="space-y-6">
+    <form onSubmit={e => { e.preventDefault(); onSave({ name, field1, field2, field3, field4, module }); }} className="space-y-6">
       <div>
         <label className={labelStyle}>Category Name</label>
         <input type="text" value={name} onChange={e => setName(e.target.value)} className={darkInput} required />
+      </div>
+      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4">
+        <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Configuration Scope</p>
+        <p className="text-xs font-bold text-gray-700 uppercase">Linked to Module: {module}</p>
       </div>
       <div>
         <label className={labelStyle}>Attribute 1 Label</label>
@@ -127,25 +117,28 @@ const ConfigModalContent: React.FC<{ initialData: ProductCategory | null, onSave
         <label className={labelStyle}>Attribute 3 Label</label>
         <input type="text" value={field3} onChange={e => setField3(e.target.value)} className={darkInput} placeholder="e.g. Material" />
       </div>
+      <div>
+        <label className={labelStyle}>Attribute 4 Label</label>
+        <input type="text" value={field4} onChange={e => setField4(e.target.value)} className={darkInput} placeholder="e.g. Brand" />
+      </div>
       <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Save Config</button>
     </form>
   );
 };
 
-// Fix: Define ProductModal component for individual inventory item management
 const ProductModal: React.FC<{
   isOpen: boolean; onClose: () => void; product: InventoryItem | null; productCategories: ProductCategory[];
-  categoryDefault?: string;
+  module: string;
   onSave: (data: Partial<InventoryItem>) => Promise<void>;
-}> = ({ isOpen, onClose, product, productCategories, categoryDefault, onSave }) => {
+}> = ({ isOpen, onClose, product, productCategories, module, onSave }) => {
   const [formData, setFormData] = useState<Partial<InventoryItem>>({
-    name: '', category: categoryDefault || '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: ''
+    name: '', category: '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: '', attr4: '', module: module
   });
 
   useEffect(() => {
     if (product) setFormData(product);
-    else setFormData({ name: '', category: categoryDefault || '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: '' });
-  }, [product, isOpen, categoryDefault]);
+    else setFormData({ name: '', category: '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: '', attr4: '', module: module });
+  }, [product, isOpen, module]);
 
   const activeCat = productCategories.find(c => c.name === formData.category);
   const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
@@ -160,11 +153,10 @@ const ProductModal: React.FC<{
             <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={darkInput} required />
           </div>
           <div className="col-span-2">
-            <label className={labelStyle}>Category</label>
+            <label className={labelStyle}>Category (Module Specific)</label>
             <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={darkInput} required>
               <option value="">Select Category...</option>
               {productCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              <option value="Supplies">Supplies</option>
             </select>
           </div>
           {activeCat?.field1 && (
@@ -179,21 +171,33 @@ const ProductModal: React.FC<{
               <input type="text" value={formData.attr2 || ''} onChange={e => setFormData({...formData, attr2: e.target.value})} className={darkInput} />
             </div>
           )}
+          {activeCat?.field3 && (
+            <div>
+              <label className={labelStyle}>{activeCat.field3}</label>
+              <input type="text" value={formData.attr3 || ''} onChange={e => setFormData({...formData, attr3: e.target.value})} className={darkInput} />
+            </div>
+          )}
+          {activeCat?.field4 && (
+            <div>
+              <label className={labelStyle}>{activeCat.field4}</label>
+              <input type="text" value={formData.attr4 || ''} onChange={e => setFormData({...formData, attr4: e.target.value})} className={darkInput} />
+            </div>
+          )}
           <div>
             <label className={labelStyle}>Quantity</label>
-            <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value)})} className={darkInput} required />
+            <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 0})} className={darkInput} required />
           </div>
           <div>
             <label className={labelStyle}>Min Stock Level</label>
-            <input type="number" value={formData.minStockLevel} onChange={e => setFormData({...formData, minStockLevel: parseInt(e.target.value)})} className={darkInput} required />
+            <input type="number" value={formData.minStockLevel} onChange={e => setFormData({...formData, minStockLevel: parseInt(e.target.value) || 0})} className={darkInput} required />
           </div>
           <div>
             <label className={labelStyle}>Selling Price</label>
-            <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseInt(e.target.value)})} className={`${darkInput} text-yellow-400`} required />
+            <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseInt(e.target.value) || 0})} className={`${darkInput} text-yellow-400`} required />
           </div>
           <div>
             <label className={labelStyle}>Min Price</label>
-            <input type="number" value={formData.minPrice} onChange={e => setFormData({...formData, minPrice: parseInt(e.target.value)})} className={`${darkInput} text-rose-400`} required />
+            <input type="number" value={formData.minPrice} onChange={e => setFormData({...formData, minPrice: parseInt(e.target.value) || 0})} className={`${darkInput} text-rose-400`} required />
           </div>
         </div>
         <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all mt-4">Save Entry</button>
@@ -210,7 +214,7 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
   const [editingProductType, setEditingProductType] = useState<ProductCategory | null>(null);
 
   const INVENTORY_TABS = [
-      { id: 'large-format', label: 'Large Format', type: 'stock' },
+      { id: 'large-format', label: 'Large Format', type: 'mixed' },
       { id: 'dtf', label: 'DTF', type: 'mixed' },
       { id: 'embroidery', label: 'Embroidery', type: 'product' },
       { id: 'bizhub', label: 'Bizhub', type: 'product' },
@@ -221,56 +225,28 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
   const activeCategoryConfig = INVENTORY_TABS.find(t => t.id === activeCategoryTab) || INVENTORY_TABS[0];
 
   const filteredMaterialCategories = useMemo(() => {
-      if (activeCategoryConfig.type === 'product') return [];
-      return props.materialCategories.filter(cat => {
-          const isDTF = ['dtf', 'direct to film'].some(match => cat.name.toLowerCase().includes(match));
-          if (activeCategoryTab === 'dtf') return isDTF;
-          if (activeCategoryTab === 'large-format') return !isDTF;
-          return false;
-      });
-  }, [props.materialCategories, activeCategoryTab, activeCategoryConfig]);
+      return props.materialCategories.filter(cat => cat.module === activeCategoryTab);
+  }, [props.materialCategories, activeCategoryTab]);
 
   const filteredStockItems = useMemo(() => {
-      if (activeCategoryConfig.type === 'product') return [];
-      const validCategoryIds = new Set(filteredMaterialCategories.map(c => c.id));
-      let items = props.stockItems.filter(item => validCategoryIds.has(item.categoryId));
-      if (activeCategoryTab === 'dtf') {
-        items = items.filter(item => item.itemName.toLowerCase().includes('film') || item.itemName.toLowerCase().includes('roll'));
-      }
-      return items;
-  }, [props.stockItems, filteredMaterialCategories, activeCategoryConfig, activeCategoryTab]);
+      return props.stockItems.filter(item => item.module === activeCategoryTab);
+  }, [props.stockItems, activeCategoryTab]);
 
   const filteredInventory = useMemo(() => {
-      if (activeCategoryConfig.type === 'stock') return [];
-      return props.inventory.filter(item => {
-          const itemCat = item.category ? item.category.toLowerCase() : '';
-          const itemName = item.name ? item.name.toLowerCase() : '';
-          if (activeCategoryTab === 'supplies') {
-              return item.isConsumable === true || ['ink', 'powder', 'solution', 'clean', 'thread', 'toner'].some(m => itemCat.includes(m) || itemName.includes(m));
-          }
-          if (activeCategoryTab === 'products') {
-              return item.isConsumable === false || !['ink', 'powder', 'solution', 'clean', 'thread', 'toner'].some(m => itemCat.includes(m) || itemName.includes(m));
-          }
-          if (activeCategoryTab === 'dtf') {
-              return ['ink', 'powder', 'clean', 'solution'].some(match => itemCat.includes(match) || itemName.includes(match));
-          }
-          const matchKeywords: Record<string, string[]> = {
-              'embroidery': ['embroidery', 't-shirt', 'shirt', 'polo', 'cap', 'uniform', 'garment'],
-              'bizhub': ['bizhub', 'general', 'print', 'card', 'flyer', 'poster', 'book', 'document'],
-          };
-          const keywords = matchKeywords[activeCategoryTab] || [];
-          return keywords.some(match => itemCat.includes(match) || itemName.includes(match));
-      });
-  }, [props.inventory, activeCategoryTab, activeCategoryConfig]);
+      return props.inventory.filter(item => item.module === activeCategoryTab);
+  }, [props.inventory, activeCategoryTab]);
 
-  const activeCategoryClass = "px-6 py-4 text-[11px] font-black text-yellow-900 bg-yellow-400/10 border-b-4 border-yellow-500 transition-all uppercase tracking-widest";
-  const inactiveCategoryClass = "px-6 py-4 text-[11px] font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-all uppercase tracking-widest";
+  const filteredProductCategories = useMemo(() => {
+      return props.productCategories.filter(cat => cat.module === activeCategoryTab);
+  }, [props.productCategories, activeCategoryTab]);
+
+  const activeCategoryClass = "px-6 py-4 text-[11px] font-black text-yellow-900 bg-yellow-400/10 border-b-4 border-yellow-500 transition-all uppercase tracking-widest whitespace-nowrap";
+  const inactiveCategoryClass = "px-6 py-4 text-[11px] font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-all uppercase tracking-widest whitespace-nowrap";
   const activeSubTabClass = "px-5 py-2 text-[10px] font-black text-white bg-[#1A2232] rounded-lg shadow-md transition-all uppercase tracking-wider";
   const inactiveSubTabClass = "px-5 py-2 text-[10px] font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition-all uppercase tracking-wider";
 
   return (
     <div className="space-y-8">
-      {/* Top Category Tabs */}
       <div className="flex overflow-x-auto border-b border-gray-200 no-scrollbar">
           {INVENTORY_TABS.map(tab => (
               <button 
@@ -283,7 +259,6 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
           ))}
       </div>
 
-      {/* Sub-Tabs Pills */}
       <div className="flex items-center space-x-1 bg-gray-200/50 p-1 rounded-xl w-fit">
           <button onClick={() => setActiveSubTab('dashboard')} className={activeSubTab === 'dashboard' ? activeSubTabClass : inactiveSubTabClass}>Dashboard</button>
           <button onClick={() => setActiveSubTab('setup')} className={activeSubTab === 'setup' ? activeSubTabClass : inactiveSubTabClass}>Setup</button>
@@ -292,7 +267,13 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
 
       <div className="min-h-[500px]">
         {activeSubTab === 'dashboard' && (
-            <InventoryDashboardView {...props} categoryConfig={activeCategoryConfig} filteredStockItems={filteredStockItems} filteredInventory={filteredInventory} />
+            <InventoryDashboardView 
+                {...props} 
+                categoryConfig={activeCategoryConfig} 
+                filteredStockItems={filteredStockItems} 
+                filteredInventory={filteredInventory} 
+                filteredProductCategories={filteredProductCategories}
+            />
         )}
         {activeSubTab === 'setup' && (
             <SetupView 
@@ -300,6 +281,7 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
                 categoryConfig={activeCategoryConfig} 
                 filteredMaterialCategories={filteredMaterialCategories} 
                 filteredStockItems={filteredStockItems}
+                filteredProductCategories={filteredProductCategories}
                 onOpenProductTypeModal={(config) => {
                     setEditingProductType(config);
                     setIsProductTypeModalOpen(true);
@@ -307,13 +289,20 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
             />
         )}
         {activeSubTab === 'reports' && (
-            <InventoryReportsView {...props} categoryConfig={activeCategoryConfig} filteredStockItems={filteredStockItems} filteredInventory={filteredInventory} />
+            <InventoryReportsView 
+                {...props} 
+                categoryConfig={activeCategoryConfig} 
+                filteredStockItems={filteredStockItems} 
+                filteredInventory={filteredInventory} 
+                filteredProductCategories={filteredProductCategories}
+            />
         )}
       </div>
 
       <Modal isOpen={isProductTypeModalOpen} onClose={() => setIsProductTypeModalOpen(false)} title={editingProductType ? "Modify Product Configuration" : "Establish New Product Type"}>
           <ConfigModalContent 
               initialData={editingProductType} 
+              module={activeCategoryTab}
               onSave={async (data) => {
                   if (editingProductType) await props.onUpdateProductCategory(editingProductType.id, data);
                   else await props.onAddProductCategory(data as any);
@@ -325,15 +314,15 @@ const InventoryView: React.FC<InventoryViewProps> = (props) => {
   );
 };
 
-// --- DASHBOARD VIEW ---
 interface InventoryDashboardViewProps extends InventoryViewProps {
     categoryConfig: { id: string, label: string, type: string };
     filteredStockItems: StockItem[];
     filteredInventory: InventoryItem[];
+    filteredProductCategories: ProductCategory[];
 }
 
 const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({ 
-    categoryConfig, filteredStockItems, filteredInventory, productCategories,
+    categoryConfig, filteredStockItems, filteredInventory, filteredProductCategories,
     onStockIn, onStockOut, onAddInventoryItem, onUpdateInventoryItem, onDeleteInventoryItem 
 }) => {
     const [isStockInOpen, setIsStockInOpen] = useState(false);
@@ -452,7 +441,7 @@ const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {filteredInventory.map(item => {
-                                    const config = productCategories.find(c => c.name === item.category);
+                                    const config = filteredProductCategories.find(c => c.name === item.category);
                                     return (
                                         <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                                             <td className="px-8 py-5 font-black text-gray-900 uppercase tracking-tight">{item.name}</td>
@@ -462,6 +451,7 @@ const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({
                                                         {config.field1 && item.attr1 && <span>{config.field1}: {item.attr1}</span>}
                                                         {config.field2 && item.attr2 && <span>{config.field2}: {item.attr2}</span>}
                                                         {config.field3 && item.attr3 && <span>{config.field3}: {item.attr3}</span>}
+                                                        {config.field4 && item.attr4 && <span>{config.field4}: {item.attr4}</span>}
                                                     </div>
                                                 ) : <span className="text-[10px] text-gray-400 italic">Uncategorized</span>}
                                             </td>
@@ -497,8 +487,9 @@ const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({
             <StockInModal isOpen={isStockInOpen} onClose={() => setIsStockInOpen(false)} stockItems={filteredStockItems} onStockIn={onStockIn} />
             <StockOutModal isOpen={isStockOutOpen} onClose={() => setIsStockOutOpen(false)} stockItems={filteredStockItems} onStockOut={onStockOut} />
             <ProductModal 
-                isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} product={editingProduct} productCategories={productCategories}
-                categoryDefault={categoryConfig.id === 'supplies' ? 'Supplies' : ''}
+                isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} product={editingProduct} 
+                productCategories={filteredProductCategories}
+                module={categoryConfig.id}
                 onSave={async (data) => {
                     if (editingProduct) await onUpdateInventoryItem(editingProduct.id, data);
                     else await onAddInventoryItem(data as any);
@@ -511,8 +502,8 @@ const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({
 };
 
 const GeneralSetupView: React.FC<SetupViewProps> = ({ 
-    materialCategories, onAddCategory, onUpdateCategory, onDeleteCategory,
-    stockItems, onAddStockItem, onUpdateStockItem, onDeleteStockItem 
+    categoryConfig, filteredMaterialCategories, onAddCategory, onUpdateCategory, onDeleteCategory,
+    filteredStockItems, onAddStockItem, onUpdateStockItem, onDeleteStockItem 
 }) => {
     const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
     const [catName, setCatName] = useState('');
@@ -529,13 +520,13 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
         <div className="space-y-8">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Material Categories</h3>
+                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} Material Categories</h3>
                     <button onClick={() => setIsAddCatModalOpen(true)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
                         <PlusIcon className="w-4 h-4 mr-2"/> Add Category
                     </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {materialCategories.map(cat => (
+                    {filteredMaterialCategories.map(cat => (
                         <div key={cat.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
                             <span className="font-black text-[11px] text-gray-900 uppercase tracking-tight">{cat.name}</span>
                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -544,13 +535,13 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
                             </div>
                         </div>
                     ))}
-                    {materialCategories.length === 0 && <p className="col-span-full text-center py-6 text-gray-300 font-bold italic text-xs">No categories established</p>}
+                    {filteredMaterialCategories.length === 0 && <p className="col-span-full text-center py-6 text-gray-300 font-bold italic text-xs">No unit categories for this module</p>}
                 </div>
             </div>
 
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Inventory SKUs (Dimensions)</h3>
+                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} SKUs</h3>
                     <button onClick={() => setIsAddSkuModalOpen(true)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
                         <PlusIcon className="w-4 h-4 mr-2"/> Define SKU
                     </button>
@@ -567,10 +558,10 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {stockItems.map(item => (
+                            {filteredStockItems.map(item => (
                                 <tr key={item.skuId} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="px-6 py-4 font-black text-gray-900 uppercase tracking-tight">{item.itemName}</td>
-                                    <td className="px-6 py-4 text-center font-bold text-gray-500 text-[10px] uppercase">{materialCategories.find(c => c.id === item.categoryId)?.name || '-'}</td>
+                                    <td className="px-6 py-4 text-center font-bold text-gray-500 text-[10px] uppercase">{filteredMaterialCategories.find(c => c.id === item.categoryId)?.name || '-'}</td>
                                     <td className="px-6 py-4 text-center font-black text-gray-600">{item.width}m</td>
                                     <td className="px-6 py-4 text-center font-bold text-gray-400">{item.reorderLevel}m</td>
                                     <td className="px-6 py-4 text-right">
@@ -586,8 +577,8 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
                 </div>
             </div>
 
-            <Modal isOpen={isAddCatModalOpen} onClose={() => setIsAddCatModalOpen(false)} title="New Category Entry">
-                <form onSubmit={e => { e.preventDefault(); onAddCategory(catName); setIsAddCatModalOpen(false); setCatName(''); }} className="space-y-6">
+            <Modal isOpen={isAddCatModalOpen} onClose={() => setIsAddCatModalOpen(false)} title={`New ${categoryConfig.label} Category`}>
+                <form onSubmit={e => { e.preventDefault(); onAddCategory(catName, categoryConfig.id); setIsAddCatModalOpen(false); setCatName(''); }} className="space-y-6">
                     <div>
                         <label className={labelStyle}>Material Specification Label</label>
                         <input type="text" value={catName} onChange={e => setCatName(e.target.value)} className={darkInput} placeholder="e.g. Premium Banner" required />
@@ -596,14 +587,14 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
                 </form>
             </Modal>
 
-            <Modal isOpen={isAddSkuModalOpen} onClose={() => setIsAddSkuModalOpen(false)} title="Establish New Stock Record">
-                <form onSubmit={e => { e.preventDefault(); onAddStockItem(selectedCatId, width, reorder, skuName); setIsAddSkuModalOpen(false); }} className="space-y-5">
+            <Modal isOpen={isAddSkuModalOpen} onClose={() => setIsAddSkuModalOpen(false)} title={`New ${categoryConfig.label} Stock Record`}>
+                <form onSubmit={e => { e.preventDefault(); onAddStockItem(selectedCatId, width, reorder, skuName, categoryConfig.id); setIsAddSkuModalOpen(false); }} className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
                             <label className={labelStyle}>Material Classification</label>
                             <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className={darkInput} required>
                                 <option value="" className="bg-gray-800">Assign Category...</option>
-                                {materialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
+                                {filteredMaterialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
                             </select>
                         </div>
                         <div className="md:col-span-2">
@@ -616,7 +607,7 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
                         </div>
                         <div>
                             <label className={labelStyle}>Replenishment Threshold (m)</label>
-                            <input type="number" value={reorder} onChange={e => setReorder(parseInt(e.target.value))} className={darkInput} required />
+                            <input type="number" value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 0)} className={darkInput} required />
                         </div>
                     </div>
                     <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all mt-4">Commit Inventory Logic</button>
@@ -626,8 +617,7 @@ const GeneralSetupView: React.FC<SetupViewProps> = ({
     );
 };
 
-// --- Pricing Setup (Re-styled for high contrast) ---
-const PricingSetupView: React.FC<SetupViewProps> = ({ materialCategories, pricingTiers, onAddTier, onUpdateTier, onDeleteTier }) => {
+const PricingSetupView: React.FC<SetupViewProps> = ({ filteredMaterialCategories, pricingTiers, onAddTier, onUpdateTier, onDeleteTier }) => {
     const [isAddTierModalOpen, setIsAddTierModalOpen] = useState(false);
     const [selectedCatId, setSelectedCatId] = useState('');
     const [tierName, setTierName] = useState('');
@@ -635,21 +625,21 @@ const PricingSetupView: React.FC<SetupViewProps> = ({ materialCategories, pricin
 
     const groupedTiers = useMemo(() => {
         const groups: Record<string, PricingTier[]> = {};
+        const validCatIds = new Set(filteredMaterialCategories.map(c => c.id));
+        
         pricingTiers.forEach(tier => {
-            const catId = tier.categoryId || 'uncategorized';
-            if (!groups[catId]) groups[catId] = [];
-            groups[catId].push(tier);
-        });
-        const sortedGroups: { id: string, name: string, tiers: PricingTier[] }[] = [];
-        materialCategories.forEach(cat => {
-            if (groups[cat.id]) {
-                sortedGroups.push({ id: cat.id, name: cat.name, tiers: groups[cat.id] });
-                delete groups[cat.id];
+            if (validCatIds.has(tier.categoryId)) {
+                if (!groups[tier.categoryId]) groups[tier.categoryId] = [];
+                groups[tier.categoryId].push(tier);
             }
         });
-        if (groups['uncategorized']) sortedGroups.push({ id: 'uncategorized', name: 'Uncategorized', tiers: groups['uncategorized'] });
-        return sortedGroups;
-    }, [pricingTiers, materialCategories]);
+        
+        return filteredMaterialCategories.map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            tiers: groups[cat.id] || []
+        }));
+    }, [pricingTiers, filteredMaterialCategories]);
 
     const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
     const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
@@ -699,7 +689,7 @@ const PricingSetupView: React.FC<SetupViewProps> = ({ materialCategories, pricin
                         <label className={labelStyle}>Material Mapping</label>
                         <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className={darkInput} required>
                             <option value="" className="bg-gray-800">Select Classification...</option>
-                            {materialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
+                            {filteredMaterialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
                         </select>
                     </div>
                     <div>

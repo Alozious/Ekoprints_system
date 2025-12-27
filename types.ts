@@ -2,6 +2,7 @@
 export interface ProductCategory {
   id: string;
   name: string; // e.g. "Tshirt"
+  module: string; // e.g. "embroidery", "bizhub"
   field1?: string; // e.g. "Neck Type"
   field1Options?: string[]; // e.g. ["V-Neck", "Round", "Collared"]
   field2?: string; // e.g. "Brand"
@@ -18,6 +19,7 @@ export interface InventoryItem {
   id: string;
   name: string;
   category: string; // Links to ProductCategory name
+  module: string; // Business unit this belongs to
   quantity: number;
   price: number; // Selling Price (Preferred)
   minPrice: number; // Minimum negotiated price allowed
@@ -109,11 +111,13 @@ export interface MaterialCategory {
   id: string;
   name: string;
   isActive: boolean;
+  module: string; // Business unit
 }
 
 export interface StockItem {
   skuId: string;
   categoryId: string;
+  module: string; // Business unit
   width: number; // in meters
   itemName: string;
   totalStockMeters: number;

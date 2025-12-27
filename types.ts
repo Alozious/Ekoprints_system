@@ -69,7 +69,9 @@ export interface Sale {
   date: string;
   items: SaleItem[];
   customerId: string;
-  total: number;
+  total: number; // Final grand total after discount
+  subtotal?: number; // Total before discount
+  discount?: number; // Amount discounted
   amountPaid?: number;
   status: 'Paid' | 'Unpaid' | 'Pending' | 'Partially Paid';
   userId: string;

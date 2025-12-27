@@ -46,6 +46,7 @@ const App: React.FC = () => {
     const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
     const [quoteNarration, setQuoteNarration] = useState('');
+    const [quoteDiscount, setQuoteDiscount] = useState(0);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
     const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -263,7 +264,7 @@ const App: React.FC = () => {
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView 
-                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); }}
+                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); }}
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
@@ -272,7 +273,7 @@ const App: React.FC = () => {
                         {activeView === 'Calculator' && (
                             <CalculatorView 
                                 stockItems={stockItems} pricingTiers={pricingTiers} inventory={inventory} materialCategories={materialCategories} productCategories={productCategories}
-                                onCreateSale={(items, narration) => { setQuoteForSale(items); setQuoteNarration(narration); setActiveView('Sales'); }}
+                                onCreateSale={(items, narration, discount) => { setQuoteForSale(items); setQuoteNarration(narration); setQuoteDiscount(discount); setActiveView('Sales'); }}
                             />
                         )}
                         {activeView === 'Inventory' && (

@@ -16,6 +16,7 @@ interface SalesViewProps {
   users: User[];
   quoteForSale: SaleItem[];
   quoteNarration?: string;
+  quoteDiscount: number;
   clearQuote: () => void;
   onAddSale: (saleData: Omit<Sale, 'id'>) => Promise<void>;
   onDeleteSale: (sale: Sale) => Promise<void>;
@@ -241,7 +242,7 @@ const SearchableMaterialSelect: React.FC<{
 };
 
 const SalesView: React.FC<SalesViewProps> = ({ 
-  sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, clearQuote,
+  sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, clearQuote,
   onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut
 }) => {
   const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
@@ -278,7 +279,8 @@ const SalesView: React.FC<SalesViewProps> = ({
     }
   }, [quoteForSale]);
 
-  const totalQuote = useMemo(() => quoteForSale.reduce((sum, item) => sum + item.price * item.quantity, 0), [quoteForSale]);
+  const subtotalQuote = useMemo(() => quoteForSale.reduce((sum, item) => sum + item.price * item.quantity, 0), [quoteForSale]);
+  const totalQuote = subtotalQuote - quoteDiscount;
 
   const handleCreateSale = async () => {
     if (!customerId) return;
@@ -286,6 +288,8 @@ const SalesView: React.FC<SalesViewProps> = ({
       date: new Date().toISOString(),
       items: quoteForSale,
       customerId,
+      subtotal: subtotalQuote,
+      discount: quoteDiscount,
       total: totalQuote,
       amountPaid,
       status: amountPaid >= totalQuote ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid',
@@ -734,9 +738,22 @@ const SalesView: React.FC<SalesViewProps> = ({
                 </div>
                 ))}
              </div>
-             <div className="pt-4 mt-2 border-t-2 border-dashed border-gray-200 flex justify-between items-baseline">
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Payable Total</span>
-               <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(totalQuote)}</span>
+             
+             <div className="pt-4 mt-2 border-t-2 border-dashed border-gray-200 space-y-1">
+               <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                   <span>Subtotal</span>
+                   <span>{formatUGX(subtotalQuote)}</span>
+               </div>
+               {quoteDiscount > 0 && (
+                   <div className="flex justify-between items-center text-[10px] font-black text-rose-500 uppercase tracking-widest">
+                       <span>Discount (Applied)</span>
+                       <span>-{formatUGX(quoteDiscount)}</span>
+                   </div>
+               )}
+               <div className="flex justify-between items-baseline pt-2">
+                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Final Payable</span>
+                 <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(totalQuote)}</span>
+               </div>
              </div>
           </div>
 

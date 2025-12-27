@@ -10,7 +10,7 @@ interface CalculatorViewProps {
     inventory: InventoryItem[];
     materialCategories: MaterialCategory[];
     productCategories: ProductCategory[];
-    onCreateSale: (items: SaleItem[], narration: string) => void;
+    onCreateSale: (items: SaleItem[], narration: string, discount: number) => void;
 }
 
 type Unit = 'm' | 'ft' | 'in' | 'cm';
@@ -139,12 +139,32 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     const [manualPrice, setManualPrice] = useState<number>(0);
     const [manualQuantity, setManualQuantity] = useState<number>(1);
 
+    // Discount State
+    const [finalPayable, setFinalPayable] = useState<number | null>(null);
+
     const activeTabConfig = useMemo(() => CALCULATOR_TABS.find(t => t.id === activeTab) || CALCULATOR_TABS[0], [activeTab]);
     const isDTF = activeTab === 'dtf';
 
     const lengthInMeters = useMemo(() => length * CONVERSION_TO_METER[lengthUnit], [length, lengthUnit]);
     const widthInMeters = useMemo(() => width * CONVERSION_TO_METER[widthUnit], [width, widthUnit]);
     const areaInSqCm = useMemo(() => (lengthInMeters * 100) * (widthInMeters * 100), [lengthInMeters, widthInMeters]);
+
+    const subtotalQuotePrice = useMemo(() => quoteItems.reduce((acc, item) => acc + item.price * item.quantity, 0), [quoteItems]);
+
+    // Handle initial state for finalPayable
+    useEffect(() => {
+        setFinalPayable(subtotalQuotePrice);
+    }, [subtotalQuotePrice]);
+
+    const discountAmount = useMemo(() => {
+        if (finalPayable === null) return 0;
+        return subtotalQuotePrice - (finalPayable || 0);
+    }, [subtotalQuotePrice, finalPayable]);
+
+    const discountPercentage = useMemo(() => {
+        if (subtotalQuotePrice === 0) return 0;
+        return (discountAmount / subtotalQuotePrice) * 100;
+    }, [subtotalQuotePrice, discountAmount]);
 
     const visiblePaperSizes = useMemo(() => {
         if (isDTF) return ['A4', 'A3'];
@@ -303,17 +323,16 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     const handleClearQuote = () => {
         setQuoteItems([]);
         setGlobalNarration('');
+        setFinalPayable(0);
     };
 
     const handleCreateSaleClick = () => {
         if (quoteItems.length === 0) return;
-        onCreateSale(quoteItems, globalNarration);
+        onCreateSale(quoteItems, globalNarration, discountAmount);
         handleClearQuote();
     };
 
     const handleRemoveQuoteItem = (index: number) => setQuoteItems(prev => prev.filter((_, i) => i !== index));
-
-    const totalQuotePrice = useMemo(() => quoteItems.reduce((acc, item) => acc + item.price * item.quantity, 0), [quoteItems]);
 
     const handlePresetClick = (name: string, size: {width: number; height: number}) => {
         if (isDTF) {
@@ -652,7 +671,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                 ))}
                             </div>
                              
-                             <div className="mt-8 pt-8 border-t-2 border-dashed border-gray-100 space-y-6 shrink-0">
+                             <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-100 space-y-6 shrink-0">
                                 <div>
                                     <label className={labelClass}>Internal Job Details (Team Only)</label>
                                     <textarea 
@@ -662,15 +681,38 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         className="w-full rounded-[1.8rem] border-2 border-gray-50 bg-gray-50 p-5 text-xs font-bold text-gray-900 focus:bg-white focus:border-yellow-400 outline-none resize-none shadow-inner transition-all placeholder-gray-300"
                                         placeholder="Add production notes for internal tracking..."
                                     />
-                                    <p className="text-[9px] text-gray-400 font-bold italic mt-2 ml-1">* Private notes. Not visible on client invoice.</p>
                                 </div>
                                 
-                                <div className="flex justify-between items-end bg-[#1A2232] p-8 rounded-[2.2rem] shadow-2xl relative overflow-hidden group">
-                                    <div className="relative z-10">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-2">Payable Total</span>
-                                        <span className="text-4xl font-black text-yellow-400 tracking-tighter leading-none">{formatUGX(totalQuotePrice)}</span>
+                                <div className="space-y-4">
+                                    <div className="bg-[#1A2232] p-6 rounded-[2.2rem] shadow-2xl relative overflow-hidden group">
+                                        <div className="relative z-10 flex flex-col">
+                                            <div className="flex justify-between items-end mb-2">
+                                                <div>
+                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-1">Payable Total</span>
+                                                    <span className="text-3xl font-black text-yellow-400 tracking-tighter leading-none">{formatUGX(finalPayable || subtotalQuotePrice)}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Discount</span>
+                                                    <div className="flex items-center justify-end gap-2 mt-1">
+                                                        <input 
+                                                            type="text"
+                                                            value={formatNumberWithCommas(finalPayable === null ? subtotalQuotePrice : (finalPayable || 0))}
+                                                            onChange={e => setFinalPayable(parseCommaString(e.target.value))}
+                                                            className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-xs font-black text-white w-28 text-right focus:bg-white/20 outline-none transition-all"
+                                                            placeholder="Final Amt"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {discountAmount > 0 && (
+                                                <div className="flex justify-between items-center border-t border-white/5 pt-2 mt-2">
+                                                    <span className="text-[8px] font-black text-rose-300 uppercase tracking-widest">Saving Client: {formatUGX(discountAmount)}</span>
+                                                    <span className="text-[8px] font-black text-rose-300 bg-rose-400/20 px-2 py-0.5 rounded-full">{discountPercentage.toFixed(1)}% OFF</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all duration-700"></div>
                                     </div>
-                                    <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all duration-700"></div>
                                 </div>
                             </div>
                         </>

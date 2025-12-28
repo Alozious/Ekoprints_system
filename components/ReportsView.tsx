@@ -13,7 +13,7 @@ interface ReportsViewProps {
   currentUser: User;
 }
 
-type ReportPeriod = 'all' | 'year' | 'month' | 'today' | 'custom';
+type ReportPeriod = 'all' | 'year' | 'month' | 'today' | 'yesterday' | 'custom';
 type ModuleFilter = 'all' | 'largeformat' | 'dtf' | 'embroidery' | 'bizhub' | 'supplies' | 'products';
 
 const formatUGX = (amount: number) => {
@@ -24,6 +24,7 @@ const formatUGX = (amount: number) => {
 const ROLL_LENGTH_METERS = 50;
 
 const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser }) => {
+  const isBankerOnly = currentUser.role === 'user' && currentUser.isBanker;
   const [period, setPeriod] = useState<ReportPeriod>('today');
   const [activeModule, setActiveModule] = useState<ModuleFilter>('all');
   const [customDate, setCustomDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -43,6 +44,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     const todayString = now.toDateString();
+    
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayString = yesterday.toDateString();
 
     const checkModuleMatch = (itemName: string) => {
         if (activeModule === 'all') return true;
@@ -61,6 +66,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
               if (period === 'year') return itemDate.getFullYear() === currentYear;
               if (period === 'month') return itemDate.getFullYear() === currentYear && itemDate.getMonth() === currentMonth;
               if (period === 'today') return itemDate.toDateString() === todayString;
+              if (period === 'yesterday') return itemDate.toDateString() === yesterdayString;
               if (period === 'custom') return itemDate.toDateString() === new Date(customDate).toDateString();
               return true;
           });
@@ -69,6 +75,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
               if (period === 'year') return itemDate.getFullYear() === currentYear;
               if (period === 'month') return itemDate.getFullYear() === currentYear && itemDate.getMonth() === currentMonth;
               if (period === 'today') return itemDate.toDateString() === todayString;
+              if (period === 'yesterday') return itemDate.toDateString() === yesterdayString;
               if (period === 'custom') return itemDate.toDateString() === new Date(customDate).toDateString();
               return true;
           });
@@ -180,6 +187,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
 
   const getPeriodLabel = () => {
     if(period === 'today') return 'Today';
+    if(period === 'yesterday') return 'Yesterday';
     if(period === 'month') return 'This Month';
     if(period === 'year') return 'This Year';
     if(period === 'custom') return new Date(customDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
@@ -188,11 +196,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
 
   const getBankingTitle = () => {
       if (period === 'today') return 'Daily Cash Flow Summary';
+      if (period === 'yesterday') return 'Yesterday\'s Cash Flow Summary';
       if (period === 'month') return 'Monthly Cash Flow Summary';
       if (period === 'year') return 'Annual Cash Flow Summary';
       if (period === 'custom') return `Cash Flow for ${new Date(customDate).toLocaleDateString()}`;
       return 'Total Cash Flow Summary';
   };
+
+  const periodsToDisplay: ReportPeriod[] = isBankerOnly ? ['today', 'yesterday'] : ['today', 'month', 'year', 'all', 'custom'];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -205,7 +216,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
             </h2>
             
             <div className="flex flex-wrap items-center gap-3">
-                {period === 'custom' && (
+                {period === 'custom' && !isBankerOnly && (
                     <div className="flex items-center bg-white rounded-xl shadow-sm border border-gray-200 p-1 pr-3 fade-in group">
                         <div className="p-2 text-gray-400 group-hover:text-blue-500 transition-colors">
                             <CalendarIcon className="w-5 h-5" />
@@ -220,14 +231,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                 )}
                 
                 <div className="flex bg-gray-200/50 p-1 rounded-[1.2rem] shadow-inner border border-gray-200">
-                    {(['today', 'month', 'year', 'all', 'custom'] as ReportPeriod[]).map(p => (
+                    {periodsToDisplay.map(p => (
                         <button 
                             key={p} 
                             onClick={() => setPeriod(p)} 
                             className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center ${period === p ? 'bg-white text-blue-600 shadow-md scale-[1.02]' : 'text-gray-500 hover:text-gray-800'}`}
                         >
                             {p === 'custom' && <CalendarIcon className="w-3 h-3 mr-1.5" />}
-                            {p === 'today' ? 'Today' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Specific Date'}
+                            {p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Specific Date'}
                         </button>
                     ))}
                 </div>

@@ -250,11 +250,18 @@ const SalesView: React.FC<SalesViewProps> = ({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
   const [isNarrationModalOpen, setIsNarrationModalOpen] = useState(false);
+  const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false);
+  
   const [selectedSale, setSelectedSale] = useState<(Sale & { customer: Customer }) | null>(null);
   const [payingSale, setPayingSale] = useState<Sale | null>(null);
   const [saleForUsage, setSaleForUsage] = useState<Sale | null>(null);
   const [saleForNarration, setSaleForNarration] = useState<Sale | null>(null);
+  const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
+  
+  const [editedItems, setEditedItems] = useState<SaleItem[]>([]);
+  const [editedDiscount, setEditedDiscount] = useState(0);
   const [editedNarration, setEditedNarration] = useState('');
+  
   const [usageEntries, setUsageEntries] = useState<{[key: string]: { skuId: string, meters: number }}>({});
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
@@ -341,6 +348,52 @@ const SalesView: React.FC<SalesViewProps> = ({
           setIsNarrationModalOpen(false);
           setSaleForNarration(null);
       }
+  };
+
+  const handleOpenEditInvoice = (sale: Sale) => {
+      setSaleToEdit(sale);
+      setEditedItems([...sale.items]);
+      setEditedDiscount(sale.discount || 0);
+      setEditedNarration(sale.notes || '');
+      setIsEditInvoiceModalOpen(true);
+  };
+
+  const handleUpdateItemInEdit = (index: number, field: keyof SaleItem, value: any) => {
+      const newList = [...editedItems];
+      newList[index] = { ...newList[index], [field]: value };
+      setEditedItems(newList);
+  };
+
+  const handleRemoveItemInEdit = (index: number) => {
+      setEditedItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveInvoiceEdit = async () => {
+      if (!saleToEdit) return;
+      if (editedItems.length === 0) {
+          addToast("Invoice must contain at least one item. Use delete to remove entire sale.", "error");
+          return;
+      }
+      
+      const newSubtotal = editedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const newTotal = newSubtotal - editedDiscount;
+      const paid = saleToEdit.amountPaid || 0;
+      const newStatus = paid >= newTotal ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid';
+      
+      const updatedSale: Sale = {
+          ...saleToEdit,
+          items: editedItems,
+          subtotal: newSubtotal,
+          discount: editedDiscount,
+          total: newTotal,
+          status: newStatus,
+          notes: editedNarration
+      };
+      
+      await onUpdateSale(updatedSale);
+      addToast("Invoice contents updated successfully.", "success");
+      setIsEditInvoiceModalOpen(false);
+      setSaleToEdit(null);
   };
 
   const handleOpenPayment = (sale: Sale) => {
@@ -602,7 +655,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                 <td className="px-8 py-4 text-center">
                   <div className="flex justify-center gap-2">
                     <button onClick={() => handleViewInvoice(sale)} className="p-2.5 text-gray-900 hover:text-blue-600 transition-all bg-blue-50/50 rounded-xl hover:scale-110" title="Review Invoice"><DocumentTextIcon className="w-5 h-5" /></button>
-                    <button onClick={() => handleOpenNarration(sale)} className="p-2.5 text-gray-900 hover:text-purple-600 transition-all bg-purple-50/50 rounded-xl hover:scale-110" title="Job Production Notes"><EditIcon className="w-5 h-5" /></button>
+                    
+                    {currentUser.role === 'admin' ? (
+                        <button onClick={() => handleOpenEditInvoice(sale)} className="p-2.5 text-gray-900 hover:text-orange-600 transition-all bg-orange-50/50 rounded-xl hover:scale-110" title="Edit Invoice Contents"><EditIcon className="w-5 h-5" /></button>
+                    ) : (
+                        <button onClick={() => handleOpenNarration(sale)} className="p-2.5 text-gray-900 hover:text-purple-600 transition-all bg-purple-50/50 rounded-xl hover:scale-110" title="Job Production Notes"><EditIcon className="w-5 h-5" /></button>
+                    )}
+
                     {sale.status !== 'Paid' && (
                         <button onClick={() => handleOpenPayment(sale)} className="p-2.5 text-gray-900 hover:text-green-600 transition-all bg-green-50/50 rounded-xl hover:scale-110" title="Receive Payment"><BanknotesIcon className="w-5 h-5" /></button>
                     )}
@@ -625,7 +684,98 @@ const SalesView: React.FC<SalesViewProps> = ({
         </table>
       </div>
 
-      {/* Narration Modal - Production Details */}
+      {/* Admin Edit Invoice Modal - Powerful Inline Editor */}
+      <Modal isOpen={isEditInvoiceModalOpen} onClose={() => setIsEditInvoiceModalOpen(false)} title="Administrative Invoice Editor">
+          <div className="space-y-6">
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center gap-3">
+                  <div className="p-2 bg-orange-400 rounded-xl text-white shadow-sm"><EditIcon className="w-5 h-5"/></div>
+                  <div>
+                      <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest leading-none mb-1">Administrative Overide</p>
+                      <p className="text-xs font-bold text-orange-600">Modifying Invoice: <strong className="text-gray-900">#{saleToEdit?.id.substring(0,8).toUpperCase()}</strong></p>
+                  </div>
+              </div>
+
+              <div className="space-y-4">
+                  <div className="overflow-hidden border border-gray-100 rounded-[1.8rem] shadow-sm bg-white">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-gray-50 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                              <tr>
+                                  <th className="px-5 py-4">Item Name</th>
+                                  <th className="px-5 py-4 w-20 text-center">Qty</th>
+                                  <th className="px-5 py-4 w-32 text-right">Unit Price</th>
+                                  <th className="px-5 py-4 w-12"></th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {editedItems.map((item, idx) => (
+                                  <tr key={idx} className="group hover:bg-gray-50/50">
+                                      <td className="px-5 py-4">
+                                          <p className="font-black text-gray-900 text-xs uppercase tracking-tight leading-tight">{item.name}</p>
+                                      </td>
+                                      <td className="px-2 py-4">
+                                          <input 
+                                              type="number" 
+                                              value={item.quantity}
+                                              onChange={(e) => handleUpdateItemInEdit(idx, 'quantity', parseInt(e.target.value) || 1)}
+                                              className="w-16 mx-auto text-center p-2 rounded-xl bg-gray-50 border-gray-100 font-black text-xs text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none"
+                                          />
+                                      </td>
+                                      <td className="px-2 py-4">
+                                          <input 
+                                              type="number" 
+                                              value={item.price}
+                                              onChange={(e) => handleUpdateItemInEdit(idx, 'price', parseInt(e.target.value) || 0)}
+                                              className="w-28 ml-auto text-right p-2 rounded-xl bg-gray-50 border-gray-100 font-black text-xs text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none"
+                                          />
+                                      </td>
+                                      <td className="px-3 py-4 text-center">
+                                          <button onClick={() => handleRemoveItemInEdit(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><TrashIcon className="w-4 h-4"/></button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col justify-center">
+                          <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Discount Amount (UGX)</label>
+                          <input 
+                              type="number" 
+                              value={editedDiscount}
+                              onChange={(e) => setEditedDiscount(parseInt(e.target.value) || 0)}
+                              className="w-full p-2 bg-white border border-gray-200 rounded-xl font-black text-rose-600 text-sm focus:ring-2 focus:ring-rose-400 outline-none"
+                          />
+                      </div>
+                      <div className="bg-[#1A2232] p-4 rounded-2xl text-right">
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">New Total Payable</p>
+                          <p className="text-xl font-black text-yellow-400 tracking-tighter">
+                              {formatUGX(editedItems.reduce((s, i) => s + (i.price * i.quantity), 0) - editedDiscount)}
+                          </p>
+                      </div>
+                  </div>
+
+                  <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Job Narration / Admin Notes</label>
+                      <textarea 
+                          value={editedNarration}
+                          onChange={(e) => setEditedNarration(e.target.value)}
+                          className="w-full p-4 border border-gray-100 rounded-[1.5rem] bg-gray-50 text-xs font-bold text-gray-700 min-h-[100px] resize-none outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all"
+                          placeholder="Internal production updates..."
+                      />
+                  </div>
+              </div>
+
+              <button 
+                  onClick={handleSaveInvoiceEdit}
+                  className="w-full bg-blue-600 text-white py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-blue-700 active:scale-95 transition-all border border-blue-500/20"
+              >
+                  Update Invoice Contents
+              </button>
+          </div>
+      </Modal>
+
+      {/* Narration Modal - Production Details (Standard User View) */}
       <Modal isOpen={isNarrationModalOpen} onClose={() => setIsNarrationModalOpen(false)} title="Internal Production Tracking">
           <div className="space-y-6">
               <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">

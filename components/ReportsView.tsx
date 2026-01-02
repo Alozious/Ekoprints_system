@@ -420,30 +420,59 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     };
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto">
+        <div className="space-y-8 max-w-7xl mx-auto pb-12">
 
-            {/* 1. Header and Filters Section */}
-            <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
-                        Business Reports: <span className="text-yellow-600">{getPeriodLabel()}</span>
-                    </h2>
+            {/* 1. Header and Filters Section - Redesigned */}
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
+                            Business Intelligence
+                        </h2>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                            {getPeriodLabel()} • {activeModule === 'all' ? 'Unified Scope' : activeModule.toUpperCase()}
+                        </p>
+                    </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={handleGenerateStatement}
+                        className="group flex items-center bg-[#1a2232] text-yellow-400 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-900 transition-all shadow-xl active:scale-95 border border-yellow-400/10"
+                    >
+                        <PrintIcon className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                        Export Statement
+                    </button>
+                </div>
+
+                <div className="flex flex-col lg:flex-row gap-6 pt-4 border-t border-gray-50">
+                    {/* Period Selection */}
+                    <div className="space-y-2 flex-1">
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Timeframe</label>
+                        <div className="flex flex-wrap gap-2">
+                            {periodsToDisplay.map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setPeriod(p)}
+                                    className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border ${period === p
+                                            ? 'bg-blue-50 text-blue-600 border-blue-100 shadow-sm'
+                                            : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                                        }`}
+                                >
+                                    {p === 'custom' ? 'Custom Range' : p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : 'This Month'}
+                                </button>
+                            ))}
+                        </div>
+
                         {period === 'custom' && !isBankerOnly && (
-                            <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-1 pr-3 fade-in group">
-                                <div className="p-2 text-gray-400 group-hover:text-blue-500 transition-colors">
-                                    <CalendarIcon className="w-5 h-5" />
-                                </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-3 bg-gray-50 p-2 rounded-xl border border-gray-100 w-fit animate-in fade-in slide-in-from-top-2 duration-200">
                                 <select
                                     value={dateMode}
                                     onChange={(e) => setDateMode(e.target.value as 'specific' | 'range')}
-                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-gray-600 outline-none mr-2"
+                                    className="bg-white border-none rounded-lg py-1.5 pl-3 pr-8 text-[10px] font-black uppercase tracking-widest text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none shadow-sm"
                                 >
-                                    <option value="specific">Specific Date</option>
+                                    <option value="specific">Single Date</option>
                                     <option value="range">Date Range</option>
                                 </select>
-
+                                <div className="h-4 w-px bg-gray-300 mx-1"></div>
                                 <input
                                     type="date"
                                     value={customDateStart}
@@ -451,53 +480,41 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                                         setCustomDateStart(e.target.value);
                                         if (dateMode === 'specific') setCustomDateEnd(e.target.value);
                                     }}
-                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-blue-600 outline-none"
+                                    className="bg-transparent border-none p-0 text-[10px] font-black uppercase tracking-widest text-gray-600 focus:ring-0 cursor-pointer"
                                 />
-
                                 {dateMode === 'range' && (
                                     <>
-                                        <span className="text-gray-400 text-[10px] font-black">-</span>
+                                        <span className="text-gray-400 text-[10px] font-black">to</span>
                                         <input
                                             type="date"
                                             value={customDateEnd}
                                             onChange={(e) => setCustomDateEnd(e.target.value)}
-                                            className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-blue-600 outline-none"
+                                            className="bg-transparent border-none p-0 text-[10px] font-black uppercase tracking-widest text-gray-600 focus:ring-0 cursor-pointer"
                                         />
                                     </>
                                 )}
                             </div>
                         )}
+                    </div>
 
-                        <div className="flex bg-gray-200/50 p-1 rounded-[1.2rem] shadow-inner border border-gray-200">
-                            {periodsToDisplay.map(p => (
+                    {/* Module Selection */}
+                    <div className="space-y-2 flex-1">
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Business Module</label>
+                        <div className="flex flex-wrap gap-2">
+                            {(['all', 'largeformat', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products'] as ModuleFilter[]).map(mod => (
                                 <button
-                                    key={p}
-                                    onClick={() => setPeriod(p)}
-                                    className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center ${period === p ? 'bg-white text-blue-600 shadow-md scale-[1.02]' : 'text-gray-500 hover:text-gray-800'}`}
+                                    key={mod}
+                                    onClick={() => setActiveModule(mod)}
+                                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${activeModule === mod
+                                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200 shadow-sm'
+                                            : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                                        }`}
                                 >
-                                    {p === 'custom' && <CalendarIcon className="w-3 h-3 mr-1.5" />}
-                                    {p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Specific Date'}
+                                    {mod === 'all' ? 'All' : mod.replace(/([A-Z])/g, ' $1').trim()}
                                 </button>
                             ))}
                         </div>
-
-                        <div className="ml-auto">
-                            <button onClick={handleGenerateStatement} className="flex items-center bg-gray-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"><PrintIcon className="w-4 h-4 mr-2" /> Generate Statement</button>
-                        </div>
                     </div>
-                </div>
-
-                {/* Module Filter Pills */}
-                <div className="flex flex-wrap gap-2">
-                    {(['all', 'largeformat', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products'] as ModuleFilter[]).map(mod => (
-                        <button
-                            key={mod}
-                            onClick={() => setActiveModule(mod)}
-                            className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border-2 ${activeModule === mod ? 'bg-[#1a2232] text-yellow-400 border-[#1a2232] shadow-lg scale-105' : 'bg-white text-gray-400 border-gray-50 hover:border-yellow-400 hover:text-gray-700'}`}
-                        >
-                            {mod === 'all' ? 'Unified View' : mod.replace(/([A-Z])/g, ' $1').trim()}
-                        </button>
-                    ))}
                 </div>
             </div>
 

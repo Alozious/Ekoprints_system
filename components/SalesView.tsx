@@ -1,12 +1,14 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment } from '../types';
-import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
+import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, Task } from '../types';
+import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon, TaskIcon } from './icons';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
 import Invoice from './Invoice';
 import { useToast } from '../App';
 import { v4 as uuidv4 } from 'uuid';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface SalesViewProps {
   sales: Sale[];
@@ -251,17 +253,25 @@ const SalesView: React.FC<SalesViewProps> = ({
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
   const [isNarrationModalOpen, setIsNarrationModalOpen] = useState(false);
   const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false);
+  const [isAssignTaskModalOpen, setIsAssignTaskModalOpen] = useState(false);
   
   const [selectedSale, setSelectedSale] = useState<(Sale & { customer: Customer }) | null>(null);
   const [payingSale, setPayingSale] = useState<Sale | null>(null);
   const [saleForUsage, setSaleForUsage] = useState<Sale | null>(null);
   const [saleForNarration, setSaleForNarration] = useState<Sale | null>(null);
   const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
+  const [saleForTask, setSaleForTask] = useState<Sale | null>(null);
   
   const [editedItems, setEditedItems] = useState<SaleItem[]>([]);
   const [editedDiscount, setEditedDiscount] = useState(0);
   const [editedNarration, setEditedNarration] = useState('');
   
+  // Task state
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskAssignee, setTaskAssignee] = useState('');
+  const [taskDeadline, setTaskDeadline] = useState('');
+
   const [usageEntries, setUsageEntries] = useState<{[key: string]: { skuId: string, meters: number }}>({});
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
@@ -316,6 +326,40 @@ const SalesView: React.FC<SalesViewProps> = ({
     setCustomerId('');
     setAmountPaid(0);
     setIsAddSaleOpen(false);
+  };
+
+  const handleOpenAssignTask = (sale: Sale) => {
+    setSaleForTask(sale);
+    setTaskTitle(`Produce Items for Invoice #${sale.id.substring(0,8).toUpperCase()}`);
+    setTaskDesc(`Job linked to customer: ${customers.find(c => c.id === sale.customerId)?.name || 'Guest'}`);
+    setTaskAssignee('');
+    setTaskDeadline('');
+    setIsAssignTaskModalOpen(true);
+  };
+
+  const handleCreateTask = async () => {
+    if (!taskTitle || !taskAssignee || !taskDeadline || !saleForTask) return;
+    
+    const assignee = users.find(u => u.id === taskAssignee);
+    const taskData: Omit<Task, 'id'> = {
+        title: taskTitle,
+        description: taskDesc,
+        assignedTo: taskAssignee,
+        assignedToName: assignee?.username || 'Unknown',
+        assignedBy: currentUser.id,
+        saleId: saleForTask.id,
+        deadline: new Date(taskDeadline).toISOString(),
+        status: 'Pending',
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        await addDoc(collection(db, 'tasks'), taskData);
+        addToast("Production task assigned.", "success");
+        setIsAssignTaskModalOpen(false);
+    } catch (err) {
+        addToast("Task assignment failed.", "error");
+    }
   };
 
   const handleQuickAddCustomer = async (name: string, phone: string, address: string) => {
@@ -537,6 +581,9 @@ const SalesView: React.FC<SalesViewProps> = ({
     return list;
   }, [sales, currentUser, filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery, customers]);
 
+  const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
+  const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -656,6 +703,10 @@ const SalesView: React.FC<SalesViewProps> = ({
                   <div className="flex justify-center gap-2">
                     <button onClick={() => handleViewInvoice(sale)} className="p-2.5 text-gray-900 hover:text-blue-600 transition-all bg-blue-50/50 rounded-xl hover:scale-110" title="Review Invoice"><DocumentTextIcon className="w-5 h-5" /></button>
                     
+                    {currentUser.role === 'admin' && (
+                        <button onClick={() => handleOpenAssignTask(sale)} className="p-2.5 text-gray-900 hover:text-blue-600 transition-all bg-blue-50/50 rounded-xl hover:scale-110" title="Assign Production Task"><TaskIcon className="w-5 h-5" /></button>
+                    )}
+
                     {currentUser.role === 'admin' ? (
                         <button onClick={() => handleOpenEditInvoice(sale)} className="p-2.5 text-gray-900 hover:text-orange-600 transition-all bg-orange-50/50 rounded-xl hover:scale-110" title="Edit Invoice Contents"><EditIcon className="w-5 h-5" /></button>
                     ) : (
@@ -683,6 +734,40 @@ const SalesView: React.FC<SalesViewProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Task Assignment Modal */}
+      <Modal isOpen={isAssignTaskModalOpen} onClose={() => setIsAssignTaskModalOpen(false)} title="Assign Production Task">
+          <div className="space-y-6">
+              <div>
+                  <label className={labelStyle}>Task Title</label>
+                  <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} className={darkInput} placeholder="Assign a title..." />
+              </div>
+              <div>
+                  <label className={labelStyle}>Job Detail</label>
+                  <textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value)} className={`${darkInput} min-h-[100px] resize-none`} placeholder="Specific instructions..."></textarea>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label className={labelStyle}>Assign To User</label>
+                      <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} className={darkInput}>
+                          <option value="">Select Staff...</option>
+                          {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                      </select>
+                  </div>
+                  <div>
+                      <label className={labelStyle}>Completion Deadline</label>
+                      <input type="datetime-local" value={taskDeadline} onChange={e => setTaskDeadline(e.target.value)} className={darkInput} />
+                  </div>
+              </div>
+              <button 
+                  onClick={handleCreateTask}
+                  disabled={!taskTitle || !taskAssignee || !taskDeadline}
+                  className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl active:scale-95 transition-all disabled:opacity-50"
+              >
+                  Assign Production Ticket
+              </button>
+          </div>
+      </Modal>
 
       {/* Admin Edit Invoice Modal - Powerful Inline Editor */}
       <Modal isOpen={isEditInvoiceModalOpen} onClose={() => setIsEditInvoiceModalOpen(false)} title="Administrative Invoice Editor">

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon } from './icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon, TaskIcon } from './icons';
 import { User } from '../types';
 import Logo from './Logo';
 
@@ -29,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     const adminNavItems = [
         { name: 'Dashboard', icon: DashboardIcon },
         { name: 'Sales', icon: SalesIcon },
+        { name: 'Tasks', icon: TaskIcon },
         { name: 'Calculator', icon: CalculatorIcon },
         { name: 'Inventory', icon: InventoryIcon },
         { name: 'Expenses', icon: ExpensesIcon },
@@ -39,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     
     const userNavItems = [
         { name: 'Sales', icon: SalesIcon },
+        { name: 'Tasks', icon: TaskIcon },
         { name: 'Calculator', icon: CalculatorIcon },
         { name: 'Expenses', icon: ExpensesIcon },
     ];
@@ -52,7 +54,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     return (
         <aside className="w-64 bg-[#1A2232] text-white flex-shrink-0 flex-col hidden md:flex">
             <div className="flex items-center justify-center p-4 bg-[#1A2232] border-b border-gray-700">
-                {/* Remove unsupported 'variant' prop to fix type error */}
                 <Logo className="h-16" />
             </div>
             <nav className="flex-1 mt-6">

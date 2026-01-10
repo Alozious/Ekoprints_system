@@ -141,3 +141,16 @@ export interface PricingTier {
   value: number;
   categoryId: string;
 }
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  assignedTo: string; // userId
+  assignedToName: string;
+  assignedBy: string; // adminId
+  saleId?: string; // optional invoice link
+  deadline: string; // ISO date
+  status: 'Pending' | 'In Progress' | 'Completed';
+  createdAt: string;
+}

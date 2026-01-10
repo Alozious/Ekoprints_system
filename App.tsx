@@ -11,8 +11,9 @@ import ReportsView from './components/ReportsView';
 import LoginView from './components/LoginView';
 import UserManagementView from './components/UserManagementView';
 import CalculatorView from './components/CalculatorView';
+import TasksView from './components/TasksView';
 import ToastContainer from './components/Toast';
-import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory } from './types';
+import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, Task } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Firebase
@@ -44,6 +45,7 @@ const App: React.FC = () => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
     const [quoteNarration, setQuoteNarration] = useState('');
     const [quoteDiscount, setQuoteDiscount] = useState(0);
@@ -77,7 +79,8 @@ const App: React.FC = () => {
                 fetchData('pricingTiers').then(data => setPricingTiers(data as any[])),
                 fetchData('sales').then(data => setSales((data as Sale[]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
-                fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[]))
+                fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[])),
+                fetchData('tasks').then(data => setTasks((data as Task[]).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())))
             ];
             await Promise.all(dataPromises);
         } catch (error) {
@@ -268,6 +271,14 @@ const App: React.FC = () => {
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
+                            />
+                        )}
+                        {activeView === 'Tasks' && (
+                            <TasksView 
+                                tasks={tasks} users={users} currentUser={currentUser} sales={sales}
+                                onAddTask={(data) => createDocument('tasks', data, setTasks, 'Task assigned successfully.')}
+                                onUpdateTask={(id, data) => updateDocument('tasks', id, data, setTasks, 'Task updated.')}
+                                onDeleteTask={(id) => deleteDocument('tasks', id, setTasks, 'Task deleted.')}
                             />
                         )}
                         {activeView === 'Calculator' && (

@@ -41,11 +41,6 @@ export const LogoutIcon = ({ className }: { className?: string }) => (
 export const CalculatorIcon = ({ className }: { className?: string }) => (
     <IconWrapper className={className}><path d="M7 2v2h10V2h-2v2h-2V2H9v2H7V2H5v20h14V2H7zm8 16H9v-2h6v2zm0-4H9v-2h6v2zm0-4H9V8h6v2z"/></IconWrapper>
 );
-export const TaskIcon = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.494 1.13 1.13 1.41 1.834m-9.444-1.834c-.646.494-1.13 1.13-1.41 1.834m12.258 3.035c.045.033.089.067.132.101.45.352.748.887.748 1.492v9a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25v-9c0-.605.298-1.14.748-1.492a1.597 1.597 0 01.132-.101m13.25 0a1.597 1.597 0 00-1.41-1.834c-.381 0-.742.112-1.045.305m-10.795 0c-.303-.193-.664-.305-1.045-.305a1.597 1.597 0 00-1.41 1.834" />
-  </svg>
-);
 
 // New Icons
 export const MenuIcon = ({ className }: { className?: string }) => (

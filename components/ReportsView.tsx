@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer } from '../types';
-import { CalendarIcon, PrintIcon } from './icons';
+import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord } from '../types';
+import { CalendarIcon, PrintIcon, BanknotesIcon as BankIcon } from './icons';
 
 interface ReportsViewProps {
     sales: Sale[];
@@ -12,6 +12,8 @@ interface ReportsViewProps {
     materialCategories: MaterialCategory[];
     currentUser: User;
     customers?: Customer[];
+    bankingRecords?: BankingRecord[];
+    onAddBankingRecord?: (amount: number) => void;
 }
 
 type ReportPeriod = 'all' | 'year' | 'month' | 'today' | 'yesterday' | 'custom';
@@ -24,9 +26,11 @@ const formatUGX = (amount: number) => {
 
 const ROLL_LENGTH_METERS = 50;
 
-const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser, customers = [] }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, customers = [] }) => {
     const isBankerOnly = currentUser.role === 'user' && currentUser.isBanker;
     const [period, setPeriod] = useState<ReportPeriod>('today');
+    const [showBankingModal, setShowBankingModal] = useState(false);
+    const [bankingAmount, setBankingAmount] = useState('');
     const [activeModule, setActiveModule] = useState<ModuleFilter>('all');
     const [dateMode, setDateMode] = useState<'specific' | 'range'>('specific');
     const [customDateStart, setCustomDateStart] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -196,6 +200,74 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
         return { totalSalesCash, totalExpensesCash, netCashToBank: totalSalesCash - totalExpensesCash };
     }, [cashReceived, filteredData.expenses, currentUser]);
 
+    const safeBalance = useMemo(() => {
+        const calculateTotalsAt = (toDate: Date) => {
+            let cash = 0;
+            sales.forEach(sale => {
+                const salePayments = sale.payments || [];
+                if (salePayments.length > 0) {
+                    salePayments.forEach(p => {
+                        if (new Date(p.date) <= toDate) cash += p.amount;
+                    });
+                } else if (new Date(sale.date) <= toDate) {
+                    cash += (sale.amountPaid || 0);
+                }
+            });
+
+            const totalExpenses = expenses.filter(e => new Date(e.date) <= toDate).reduce((sum, e) => sum + e.amount, 0);
+            const totalBanked = bankingRecords.filter(r => new Date(r.date) <= toDate).reduce((sum, r) => sum + r.amount, 0);
+
+            return cash - totalExpenses - totalBanked;
+        };
+
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(startOfToday);
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(23, 59, 59, 999);
+
+        const safeYesterday = calculateTotalsAt(yesterday);
+
+        // Cash received today
+        let cashToday = 0;
+        sales.forEach(sale => {
+            const salePayments = sale.payments || [];
+            if (salePayments.length > 0) {
+                salePayments.forEach(p => {
+                    const pDate = new Date(p.date);
+                    if (pDate >= startOfToday && pDate <= now) cashToday += p.amount;
+                });
+            } else {
+                const sDate = new Date(sale.date);
+                if (sDate >= startOfToday && sDate <= now) cashToday += (sale.amountPaid || 0);
+            }
+        });
+
+        // Expenses today
+        const expensesToday = expenses.filter(e => {
+            const eDate = new Date(e.date);
+            return eDate >= startOfToday && eDate <= now;
+        }).reduce((sum, e) => sum + e.amount, 0);
+
+        // Banked today
+        const bankedToday = bankingRecords.filter(r => {
+            const rDate = new Date(r.date);
+            return rDate >= startOfToday && rDate <= now;
+        }).reduce((sum, r) => sum + r.amount, 0);
+
+        const currentSafe = safeYesterday + cashToday - expensesToday - bankedToday;
+
+        return { safeYesterday, cashToday, expensesToday, bankedToday, currentSafe };
+    }, [sales, expenses, bankingRecords]);
+
+    const handleBankingSubmit = () => {
+        const amount = parseFloat(bankingAmount);
+        if (isNaN(amount) || amount <= 0) return;
+        if (onAddBankingRecord) onAddBankingRecord(amount);
+        setBankingAmount('');
+        setShowBankingModal(false);
+    };
+
     const totalInvoiced = useMemo(() => filteredData.sales.reduce((sum, s) => sum + s.total, 0), [filteredData.sales]);
     const totalCashCollected = bankingSummary?.totalSalesCash || 0;
     const totalExpenses = bankingSummary?.totalExpensesCash || 0;
@@ -295,7 +367,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     const periodsToDisplay: ReportPeriod[] = isBankerOnly ? ['today', 'yesterday'] : ['today', 'month', 'year', 'all', 'custom'];
 
     const handleGenerateStatement = () => {
-        const transactions: { date: Date, type: 'income' | 'expense', mainDetail: string, subDetail: string, amount: number, ref: string }[] = [];
+        const transactions: { date: Date, type: 'income' | 'expense' | 'banking', mainDetail: string, subDetail: string, amount: number, ref: string }[] = [];
 
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -304,6 +376,37 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
         const yesterday = new Date(now);
         yesterday.setDate(now.getDate() - 1);
         const yesterdayString = yesterday.toDateString();
+
+        // Determine Start Date for Opening Balance calculation
+        let startDate: Date;
+        if (period === 'today') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        } else if (period === 'yesterday') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        } else if (period === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (period === 'year') {
+            startDate = new Date(now.getFullYear(), 0, 1);
+        } else if (period === 'custom') {
+            startDate = new Date(customDateStart); startDate.setHours(0, 0, 0, 0);
+        } else {
+            startDate = new Date(0);
+        }
+
+        const calculateBalanceBefore = (date: Date) => {
+            let inc = sales.reduce((sum, s) => {
+                const pams = s.payments || [];
+                if (pams.length > 0) {
+                    return sum + pams.reduce((pSum, p) => new Date(p.date) < date ? pSum + p.amount : pSum, 0);
+                }
+                return new Date(s.date) < date ? sum + (s.amountPaid || 0) : sum;
+            }, 0);
+            let exp = expenses.filter(e => new Date(e.date) < date).reduce((sum, e) => sum + e.amount, 0);
+            let bnk = bankingRecords.filter(r => new Date(r.date) < date).reduce((sum, r) => sum + r.amount, 0);
+            return inc - exp - bnk;
+        };
+
+        const openingSafeBalance = calculateBalanceBefore(startDate);
 
         // 1. Process Sales (Payments)
         sales.forEach(sale => {
@@ -357,22 +460,72 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
         });
 
         // 2. Process Expenses
-        filteredData.expenses.forEach(exp => {
-            transactions.push({
-                date: new Date(exp.date),
-                type: 'expense',
-                mainDetail: exp.category,
-                subDetail: exp.description,
-                amount: exp.amount,
-                ref: 'EXP'
-            });
+        expenses.forEach(exp => {
+            const expDate = new Date(exp.date);
+            let match = false;
+            if (period === 'all') match = true;
+            else if (period === 'year') match = expDate.getFullYear() === currentYear;
+            else if (period === 'month') match = expDate.getFullYear() === currentYear && expDate.getMonth() === currentMonth;
+            else if (period === 'today') match = expDate.toDateString() === todayString;
+            else if (period === 'yesterday') match = expDate.toDateString() === yesterdayString;
+            else if (period === 'custom') {
+                if (dateMode === 'specific') match = expDate.toDateString() === new Date(customDateStart).toDateString();
+                else {
+                    const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
+                    const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
+                    match = expDate >= start && expDate <= end;
+                }
+            }
+
+            if (match) {
+                transactions.push({
+                    date: expDate,
+                    type: 'expense',
+                    mainDetail: exp.category,
+                    subDetail: exp.description,
+                    amount: exp.amount,
+                    ref: 'EXP'
+                });
+            }
+        });
+
+        // 3. Process Banking Records
+        bankingRecords.forEach(record => {
+            const rDate = new Date(record.date);
+            let match = false;
+            if (period === 'all') match = true;
+            else if (period === 'year') match = rDate.getFullYear() === currentYear;
+            else if (period === 'month') match = rDate.getFullYear() === currentYear && rDate.getMonth() === currentMonth;
+            else if (period === 'today') match = rDate.toDateString() === todayString;
+            else if (period === 'yesterday') match = rDate.toDateString() === yesterdayString;
+            else if (period === 'custom') {
+                if (dateMode === 'specific') match = rDate.toDateString() === new Date(customDateStart).toDateString();
+                else {
+                    const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
+                    const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
+                    match = rDate >= start && rDate <= end;
+                }
+            }
+
+            if (match) {
+                transactions.push({
+                    date: rDate,
+                    type: 'banking',
+                    mainDetail: 'Bank Deposit',
+                    subDetail: `Recorded by ${record.userName || 'System'}`,
+                    amount: record.amount,
+                    ref: 'BANK'
+                });
+            }
         });
 
         transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
 
         const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
         const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-        const net = totalIncome - totalExpense;
+        const totalBanked = transactions.filter(t => t.type === 'banking').reduce((sum, t) => sum + t.amount, 0);
+
+        let currentRunningSafe = openingSafeBalance;
 
         const html = `
             <html>
@@ -387,34 +540,51 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                     .card { flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 8px; text-align: center; }
                     .card h4 { margin: 0 0 5px 0; font-size: 10px; text-transform: uppercase; color: #888; }
                     .card p { margin: 0; font-size: 18px; font-weight: 900; }
-                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 10px; }
                     th { text-align: left; border-bottom: 2px solid #333; padding: 10px 5px; text-transform: uppercase; }
                     td { border-bottom: 1px solid #eee; padding: 10px 5px; }
                     .text-right { text-align: right; }
-                    .income { color: #10b981; } .expense { color: #ef4444; }
+                    .income { color: #10b981; } .expense { color: #ef4444; } .banking { color: #3b82f6; }
+                    .safe-col { background: #fdfdfd; font-weight: 900; border-left: 1px solid #eee; }
                 </style>
             </head>
             <body>
                 <div class="header"><div class="logo">Eko Prints</div><div>Statement of Accounts</div></div>
                 <div class="meta">
                     <div><strong>Period:</strong> ${getPeriodLabel()}<br><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
-                    <div style="text-align:right"><strong>User:</strong> ${currentUser.username}<br><strong>Scope:</strong> ${activeModule.toUpperCase()}</div>
+                    <div style="text-align:right"><strong>User:</strong> ${currentUser.username}<br><strong>Opening Safe Balance:</strong> ${formatUGX(openingSafeBalance)}</div>
                 </div>
                 <div class="summary">
                     <div class="card"><h4>Total Income</h4><p class="income">${formatUGX(totalIncome)}</p></div>
                     <div class="card"><h4>Total Expenses</h4><p class="expense">${formatUGX(totalExpense)}</p></div>
-                    <div class="card"><h4>Net Cash Flow</h4><p style="color:${net >= 0 ? '#10b981' : '#ef4444'}">${formatUGX(net)}</p></div>
+                    <div class="card"><h4>Total Banked</h4><p class="banking">${formatUGX(totalBanked)}</p></div>
+                    <div class="card"><h4>Closing Safe Balance</h4><p style="color:#1a2232">${formatUGX(openingSafeBalance + totalIncome - totalExpense - totalBanked)}</p></div>
                 </div>
                 <table>
-                    <thead><tr><th>Date</th><th>Transaction Details</th><th>Ref</th><th class="text-right">Income</th><th class="text-right">Expense</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Transaction Details</th><th>Ref</th><th class="text-right">Income</th><th class="text-right">Expense</th><th class="text-right">Banked</th><th class="text-right safe-col">Safe Balance</th></tr></thead>
                     <tbody>
-                        ${transactions.map(t => `<tr><td>${t.date.toLocaleDateString()}</td><td><div style="font-weight:bold;margin-bottom:2px">${t.mainDetail}</div><div style="font-size:10px;color:#666;line-height:1.3">${t.subDetail}</div></td><td>${t.ref}</td><td class="text-right income">${t.type === 'income' ? formatUGX(t.amount) : '-'}</td><td class="text-right expense">${t.type === 'expense' ? formatUGX(t.amount) : '-'}</td></tr>`).join('')}
-                        ${transactions.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:20px">No transactions found</td></tr>' : ''}
+                        ${transactions.map(t => {
+            if (t.type === 'income') currentRunningSafe += t.amount;
+            else if (t.type === 'expense') currentRunningSafe -= t.amount;
+            else if (t.type === 'banking') currentRunningSafe -= t.amount;
+
+            return `<tr>
+                                <td>${t.date.toLocaleDateString()}</td>
+                                <td><div style="font-weight:bold;margin-bottom:2px">${t.mainDetail}</div><div style="font-size:10px;color:#666;line-height:1.3">${t.subDetail}</div></td>
+                                <td>${t.ref}</td>
+                                <td class="text-right income">${t.type === 'income' ? formatUGX(t.amount) : '-'}</td>
+                                <td class="text-right expense">${t.type === 'expense' ? formatUGX(t.amount) : '-'}</td>
+                                <td class="text-right banking">${t.type === 'banking' ? formatUGX(t.amount) : '-'}</td>
+                                <td class="text-right safe-col">${formatUGX(currentRunningSafe)}</td>
+                            </tr>`;
+        }).join('')}
+                        ${transactions.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:20px">No transactions found</td></tr>' : ''}
                     </tbody>
                 </table>
             </body>
             </html>
         `;
+
         const win = window.open('', '_blank', 'width=900,height=900');
         if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); }
     };
@@ -518,18 +688,35 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all">
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash From Sales ({getPeriodLabel()})</p>
-                                <p className="text-2xl font-black text-emerald-400 tracking-tight">{formatUGX(bankingSummary.totalSalesCash)}</p>
+                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash From Yesterday</p>
+                                <p className="text-2xl font-black text-blue-400 tracking-tight">{formatUGX(safeBalance.safeYesterday)}</p>
                             </div>
                             <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all">
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash Expenses ({getPeriodLabel()})</p>
-                                <p className="text-2xl font-black text-rose-400 tracking-tight">{formatUGX(bankingSummary.totalExpensesCash)}</p>
+                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash Collected (Today)</p>
+                                <p className="text-2xl font-black text-emerald-400 tracking-tight">{formatUGX(safeBalance.cashToday)}</p>
                             </div>
-                            <div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform">
-                                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Net Cash to Bank</p>
-                                <p className="text-3xl font-black text-[#1a2232] tracking-tighter">{formatUGX(bankingSummary.netCashToBank)}</p>
+                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all relative">
+                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Daily Expenses</p>
+                                <p className="text-2xl font-black text-rose-400 tracking-tight">{formatUGX(safeBalance.expensesToday)}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform relative group/safe overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover/safe:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => setShowBankingModal(true)}
+                                        className="bg-gray-900 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center"
+                                    >
+                                        <BankIcon className="w-3 h-3 mr-1.5" /> Bank Money
+                                    </button>
+                                </div>
+                                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Money In Safe</p>
+                                <p className="text-3xl font-black text-[#1a2232] tracking-tighter">{formatUGX(safeBalance.currentSafe)}</p>
+                                {safeBalance.bankedToday > 0 && (
+                                    <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase italic">
+                                        (Banked today: {formatUGX(safeBalance.bankedToday)})
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <p className="text-gray-500 text-[9px] mt-6 text-center italic font-bold uppercase tracking-widest opacity-60">
@@ -655,6 +842,61 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-500/5 rounded-full -ml-32 -mb-32 blur-3xl"></div>
             </div>
+            {/* Banking Modal */}
+            {showBankingModal && (
+                <div className="fixed inset-0 bg-[#1a2232]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 transform scale-100 transition-all border border-gray-100 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                        <div className="relative z-10">
+                            <div className="flex items-center mb-8">
+                                <div className="p-3 bg-yellow-400 rounded-2xl shadow-lg mr-4">
+                                    <BankIcon className="w-6 h-6 text-[#1a2232]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Bank Money</h3>
+                                    <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Update Safe Balance</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Amount to Bank (UGX)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            value={bankingAmount}
+                                            onChange={(e) => setBankingAmount(e.target.value)}
+                                            placeholder="Enter amount..."
+                                            className="w-full bg-gray-50 border-2 border-transparent focus:border-yellow-400 focus:bg-white rounded-[1.2rem] px-6 py-4 text-lg font-black text-gray-900 transition-all outline-none"
+                                            autoFocus
+                                        />
+                                        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 font-black text-xs uppercase tracking-widest">UGX</div>
+                                    </div>
+                                    <p className="mt-4 text-[11px] font-bold text-gray-500 bg-gray-50 p-4 rounded-2xl italic leading-relaxed">
+                                        * Banking <span className="text-gray-900 underline">{formatUGX(parseFloat(bankingAmount) || 0)}</span> will reduce the money in safe from <span className="text-yellow-600 font-black">{formatUGX(safeBalance.currentSafe)}</span> to <span className="text-emerald-600 font-black">{formatUGX(safeBalance.currentSafe - (parseFloat(bankingAmount) || 0))}</span>.
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-4 pt-2">
+                                    <button
+                                        onClick={() => { setShowBankingModal(false); setBankingAmount(''); }}
+                                        className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBankingSubmit}
+                                        disabled={!bankingAmount || parseFloat(bankingAmount) <= 0}
+                                        className="flex-[2] bg-gray-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 shadow-lg"
+                                    >
+                                        Confirm Deposit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

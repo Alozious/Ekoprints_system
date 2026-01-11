@@ -12,7 +12,7 @@ import LoginView from './components/LoginView';
 import UserManagementView from './components/UserManagementView';
 import CalculatorView from './components/CalculatorView';
 import ToastContainer from './components/Toast';
-import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory } from './types';
+import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Firebase
@@ -23,7 +23,7 @@ import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, writeBa
 
 // Toast Context
 type ToastMessage = { id: string; message: string; type: 'success' | 'error' | 'info'; };
-const ToastContext = createContext<{ addToast: (message: string, type: ToastMessage['type']) => void; }>({ addToast: () => {} });
+const ToastContext = createContext<{ addToast: (message: string, type: ToastMessage['type']) => void; }>({ addToast: () => { } });
 export const useToast = () => useContext(ToastContext);
 
 const App: React.FC = () => {
@@ -31,7 +31,7 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [appLoading, setAppLoading] = useState(true);
     const [operationLoading, setOperationLoading] = useState(false);
-    
+
     // --- Data State ---
     const [users, setUsers] = useState<User[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -44,6 +44,7 @@ const App: React.FC = () => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+    const [bankingRecords, setBankingRecords] = useState<BankingRecord[]>([]);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
     const [quoteNarration, setQuoteNarration] = useState('');
     const [quoteDiscount, setQuoteDiscount] = useState(0);
@@ -52,13 +53,13 @@ const App: React.FC = () => {
     const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
         setToasts(prev => [...prev, { id: uuidv4(), message, type }]);
     }, []);
-    
+
     // --- Data Fetching ---
     const fetchData = useCallback(async (collectionName: string) => {
         const querySnapshot = await getDocs(collection(db, collectionName));
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }, []);
-    
+
     const fetchAllData = useCallback(async () => {
         if (!currentUser) return;
         setOperationLoading(true);
@@ -72,12 +73,13 @@ const App: React.FC = () => {
                     const normalized = (data as any[]).map(d => ({ ...d, name: d.name || d.categoryName }));
                     setMaterialCategories(normalized as MaterialCategory[]);
                 }),
-                fetchData('stockItems').then(data => setStockItems((data as any[]).map(d => ({...d, skuId: d.skuId || d.id})))),
-                fetchData('stockTransactions').then(data => setStockTransactions((data as any[]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('stockItems').then(data => setStockItems((data as any[]).map(d => ({ ...d, skuId: d.skuId || d.id })))),
+                fetchData('stockTransactions').then(data => setStockTransactions((data as any[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('pricingTiers').then(data => setPricingTiers(data as any[])),
-                fetchData('sales').then(data => setSales((data as Sale[]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
-                fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
-                fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[]))
+                fetchData('sales').then(data => setSales((data as Sale[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[])),
+                fetchData('bankingRecords').then(data => setBankingRecords((data as BankingRecord[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())))
             ];
             await Promise.all(dataPromises);
         } catch (error) {
@@ -115,18 +117,18 @@ const App: React.FC = () => {
             fetchAllData();
         }
     }, [currentUser, fetchAllData]);
-    
+
     // --- Auth Handlers ---
     const handleLogin = async (email: string, password: string): Promise<string | void> => {
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (error: any) {
-        if (error.code === 'auth/invalid-login-credentials' || error.code === 'auth/invalid-credential') {
-            return 'Invalid email or password. Please check your credentials and try again.';
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error: any) {
+            if (error.code === 'auth/invalid-login-credentials' || error.code === 'auth/invalid-credential') {
+                return 'Invalid email or password. Please check your credentials and try again.';
+            }
+            console.error("Firebase Auth Error:", error);
+            return 'An unexpected error occurred during login. Please try again later.';
         }
-        console.error("Firebase Auth Error:", error);
-        return 'An unexpected error occurred during login. Please try again later.';
-      }
     };
 
     const handleLogout = async () => {
@@ -146,7 +148,7 @@ const App: React.FC = () => {
             setOperationLoading(false);
         }
     }, [addToast]);
-    
+
     const createDocument = useCallback(async (collectionName: string, data: any, stateSetter: React.Dispatch<any>, successMessage: string) => {
         const operation = async () => {
             const docRef = await addDoc(collection(db, collectionName), data);
@@ -215,15 +217,15 @@ const App: React.FC = () => {
         const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
         const secondaryAuth = getAuth(secondaryApp);
         try {
-             const userCredential = await createUserWithEmailAndPassword(secondaryAuth, userData.email, userData.password || 'password123');
-             const uid = userCredential.user.uid;
-             const { password, ...userDocData } = userData;
-             await setDoc(doc(db, 'users', uid), userDocData);
-             const newUser = { id: uid, ...userDocData };
-             setUsers(prev => [...prev, newUser]);
-             addToast(`User ${userData.username} created successfully.`, 'success');
-             await signOut(secondaryAuth);
-             deleteApp(secondaryApp);
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, userData.email, userData.password || 'password123');
+            const uid = userCredential.user.uid;
+            const { password, ...userDocData } = userData;
+            await setDoc(doc(db, 'users', uid), userDocData);
+            const newUser = { id: uid, ...userDocData };
+            setUsers(prev => [...prev, newUser]);
+            addToast(`User ${userData.username} created successfully.`, 'success');
+            await signOut(secondaryAuth);
+            deleteApp(secondaryApp);
         } catch (error: any) {
             console.error("Error adding user:", error);
             let msg = "Failed to create user.";
@@ -263,7 +265,7 @@ const App: React.FC = () => {
                         {operationLoading && <div className="fixed inset-0 bg-black bg-opacity-20 z-50 flex items-center justify-center"><div className="bg-white p-4 rounded-lg shadow-lg flex items-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>Processing...</div></div>}
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
-                            <SalesView 
+                            <SalesView
                                 sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); }}
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
@@ -271,13 +273,13 @@ const App: React.FC = () => {
                             />
                         )}
                         {activeView === 'Calculator' && (
-                            <CalculatorView 
+                            <CalculatorView
                                 stockItems={stockItems} pricingTiers={pricingTiers} inventory={inventory} materialCategories={materialCategories} productCategories={productCategories}
                                 onCreateSale={(items, narration, discount) => { setQuoteForSale(items); setQuoteNarration(narration); setQuoteDiscount(discount); setActiveView('Sales'); }}
                             />
                         )}
                         {activeView === 'Inventory' && (
-                            <InventoryView 
+                            <InventoryView
                                 materialCategories={materialCategories} stockItems={stockItems} stockTransactions={stockTransactions} pricingTiers={pricingTiers}
                                 onStockIn={async (skuId, rolls, price, notes) => {
                                     const stockItem = stockItems.find(i => i.skuId === skuId);
@@ -309,7 +311,7 @@ const App: React.FC = () => {
                             />
                         )}
                         {activeView === 'Expenses' && (
-                            <ExpensesView 
+                            <ExpensesView
                                 expenses={expenses} currentUser={currentUser} users={users} expenseCategories={expenseCategories}
                                 onAddExpense={(data) => createDocument('expenses', { ...data, userId: currentUser.id, userName: currentUser.username }, setExpenses, 'Expense added.')}
                                 onUpdateExpense={(id, data) => updateDocument('expenses', id, data, setExpenses, 'Expense updated.')}
@@ -320,14 +322,34 @@ const App: React.FC = () => {
                             />
                         )}
                         {activeView === 'Customers' && (
-                            <CustomersView 
+                            <CustomersView
                                 customers={customers} sales={sales}
                                 onAddCustomer={(data) => createDocument('customers', { ...data, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 onUpdateCustomer={(id, data) => updateDocument('customers', id, data, setCustomers, 'Customer updated.')}
                                 onDeleteCustomer={(id) => deleteDocument('customers', id, setCustomers, 'Customer deleted.')}
                             />
                         )}
-                        {activeView === 'Reports' && <ReportsView sales={sales} expenses={expenses} inventory={inventory} stockItems={stockItems} materialCategories={materialCategories} currentUser={currentUser}/>}
+                        {activeView === 'Reports' && (
+                            <ReportsView
+                                sales={sales}
+                                expenses={expenses}
+                                inventory={inventory}
+                                stockItems={stockItems}
+                                materialCategories={materialCategories}
+                                currentUser={currentUser}
+                                bankingRecords={bankingRecords}
+                                customers={customers}
+                                onAddBankingRecord={(amount) => {
+                                    const record: Omit<BankingRecord, 'id'> = {
+                                        date: new Date().toISOString(),
+                                        amount,
+                                        userId: currentUser.id,
+                                        userName: currentUser.username
+                                    };
+                                    createDocument('bankingRecords', record, setBankingRecords, 'Banking record added.');
+                                }}
+                            />
+                        )}
                         {activeView === 'Users' && currentUser.role === 'admin' && (
                             <UserManagementView users={users} currentUser={currentUser} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} />
                         )}

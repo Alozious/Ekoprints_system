@@ -48,14 +48,14 @@ export interface SaleItem {
 }
 
 export interface Customer {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-    createdAt: string;
-    totalSpent?: number;
-    outstandingDebt?: number;
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+  totalSpent?: number;
+  outstandingDebt?: number;
 }
 
 export interface Payment {
@@ -84,7 +84,7 @@ export interface Sale {
 }
 
 export interface Expense {
-  id:string;
+  id: string;
   date: string;
   category: string;
   description: string;
@@ -99,12 +99,12 @@ export interface ExpenseCategory {
 }
 
 export interface User {
-    id: string;
-    username: string;
-    email: string;
-    password?: string;
-    role: 'admin' | 'user';
-    isBanker?: boolean;
+  id: string;
+  username: string;
+  email: string;
+  password?: string;
+  role: 'admin' | 'user';
+  isBanker?: boolean;
 }
 
 export interface MaterialCategory {
@@ -141,3 +141,12 @@ export interface PricingTier {
   value: number;
   categoryId: string;
 }
+
+export interface BankingRecord {
+  id: string;
+  date: string;
+  amount: number;
+  userId: string;
+  userName?: string;
+}
+

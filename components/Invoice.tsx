@@ -299,39 +299,47 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
                         <head>
                             <title>Thermal Receipt</title>
                             <style>
+                                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
                                 @page { margin: 0; }
                                 body { 
                                     width: 80mm; 
                                     margin: 0; 
-                                    padding: 2mm; 
-                                    font-family: 'Courier New', Courier, monospace; 
+                                    padding: 1mm; 
+                                    font-family: 'Inter', -apple-system, sans-serif; 
                                     font-size: 13px; 
                                     line-height: 1.1; 
                                     color: #000;
                                     background: #fff;
+                                    font-weight: 700;
                                 }
                                 div { margin: 0; padding: 0; }
                                 .text-center { text-align: center; }
                                 .text-right { text-align: right; }
-                                .bold { font-weight: bold; }
+                                .bold { font-weight: 800; }
                                 .pre-wrap { white-space: pre-wrap; }
-                                .dashed-line { border-top: 1px dashed #000; margin: 1mm 0; }
-                                .logo { filter: brightness(0); height: 10mm; margin-bottom: 0.5mm; }
-                                table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
-                                th { text-align: left; font-size: 11px; border-bottom: 1px solid #000; padding: 1mm 0; }
+                                .dashed-line { border-top: 1px dashed #000; margin: 0.5mm 0; }
+                                .logo { filter: brightness(0); height: 10mm; display: block; margin: 0 auto 0.5mm; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 0.5mm; }
+                                th { text-align: left; font-size: 13px; border-bottom: 1px solid #000; padding: 0.5mm 0; }
                                 td { vertical-align: top; padding: 0.5mm 0; }
-                                .grand-total { font-size: 15px; font-weight: bold; }
-                                .tagline { font-size: 10px; font-style: italic; margin: 0.2mm 0; }
-                                .metadata { margin-bottom: 1mm; font-size: 12px; }
+                                .item-col { padding-right: 2mm; }
+                                .qty-col { text-align: right; padding-right: 2mm; width: 40px; }
+                                .total-col { text-align: right; width: 80px; }
+                                .total-row-item { font-size: 13px; font-weight: 800; line-height: 1.2; }
+                                .tagline { font-size: 11px; font-style: italic; font-weight: 400; margin: 0; line-height: 1; }
+                                .metadata { margin-bottom: 0.5mm; font-size: 13px; line-height: 1.1; }
+                                .footer-text { font-size: 11px; margin-top: 2mm; font-weight: 700; }
+                                .qr-section { margin-top: 2mm; margin-bottom: 2mm; text-align: center; }
+                                .qr-img { width: 30mm; height: 30mm; }
                             </style>
                         </head>
                         <body>
-                            <div class="text-center pre-wrap">
+                            <div class="text-center">
                                 <img src="https://drive.google.com/thumbnail?id=1PpzbvTQjgVf4YTreFUhpNef5vTFAU4SW&sz=w200" class="logo" />
-                                <div class="bold" style="font-size: 16px;">${settings.receiptHeader}</div>
-                                ${settings.tagline ? `<div class="tagline">${settings.tagline}</div>` : ''}
-                                <div style="font-size:11px;">Tel: ${settings.businessPhone}</div>
-                                <div style="font-size:11px;">Location: ${settings.businessLocation}</div>
+                                <div class="bold" style="font-size: 17px; line-height: 1;">${settings.receiptHeader}</div>
+                                ${settings.tagline ? `<div class="tagline" style="margin: 0.5mm 0;">${settings.tagline}</div>` : ''}
+                                <div style="font-size:12px; line-height: 1;">Tel: ${settings.businessPhone}</div>
+                                <div style="font-size:11px; line-height: 1; margin-bottom: 3mm;">${settings.businessLocation}</div>
                             </div>
                             
                             <div class="dashed-line"></div>
@@ -342,41 +350,48 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
                                 <div>Customer: ${sale.customer.name}</div>
                             </div>
                             
-                            <table>
+                            <table style="margin-bottom: 3mm;">
                                 <thead>
                                     <tr>
-                                        <th>ITEM</th>
-                                        <th class="text-right">QTY</th>
-                                        <th class="text-right">TOTAL</th>
+                                        <th class="item-col">ITEM</th>
+                                        <th class="qty-col">QTY</th>
+                                        <th class="total-col">TOTAL</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${sale.items.map(item => `
                                         <tr>
-                                            <td>${item.name}</td>
-                                            <td class="text-right">${item.quantity}</td>
-                                            <td class="text-right">${(item.price * item.quantity).toLocaleString()}</td>
+                                            <td class="item-col">${item.name}</td>
+                                            <td class="qty-col">${item.quantity}</td>
+                                            <td class="total-col">${(item.price * item.quantity).toLocaleString()}</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
                             </table>
                             
-                            <div class="dashed-line"></div>
-                            
-                            <div class="text-right" style="font-size: 12px;">
-                                <div>Subtotal: ${subtotal.toLocaleString()}</div>
-                                ${discount > 0 ? `<div>Discount: -${discount.toLocaleString()}</div>` : ''}
-                                <div class="bold">Paid: ${paid.toLocaleString()}</div>
-                                <div class="bold">Balance: ${balance.toLocaleString()}</div>
-                                <div class="grand-total" style="margin-top: 1mm;">
+                            <div class="text-right">
+                                <div class="total-row-item">Subtotal: ${subtotal.toLocaleString()}</div>
+                                ${discount > 0 ? `<div class="total-row-item">Discount: -${discount.toLocaleString()}</div>` : ''}
+                                <div class="total-row-item">Paid: ${paid.toLocaleString()}</div>
+                                <div class="total-row-item">Balance: ${balance.toLocaleString()}</div>
+                                <div class="total-row-item" style="margin-top: 1mm;">
                                     TOTAL: ${grandTotal.toLocaleString()} UGX
                                 </div>
                             </div>
                             
                             <div class="dashed-line"></div>
                             
-                            <div class="text-center pre-wrap" style="font-size: 10px; margin-top: 2mm;">
+                            <div class="qr-section">
+                                <img src="${qrCodeUrl}" class="qr-img" />
+                                <div style="font-size: 8px; margin-top: 1mm;">SCAN TO VERIFY</div>
+                            </div>
+
+                            <div class="text-center pre-wrap footer-text">
                                 ${settings.receiptFooter}
+                            </div>
+
+                            <div style="text-align: center; font-size: 9px; color: #666; margin-top: 2mm;">
+                                Powered by ${settings.businessName}
                             </div>
                             
                             <script>

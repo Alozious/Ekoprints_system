@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord } from '../types';
+import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord, SystemSettings } from '../types';
 import { CalendarIcon, PrintIcon, BanknotesIcon as BankIcon } from './icons';
 
 interface ReportsViewProps {
@@ -14,6 +14,7 @@ interface ReportsViewProps {
     customers?: Customer[];
     bankingRecords?: BankingRecord[];
     onAddBankingRecord?: (amount: number) => void;
+    settings: SystemSettings;
 }
 
 type ReportPeriod = 'all' | 'year' | 'month' | 'today' | 'yesterday' | 'custom';
@@ -26,7 +27,7 @@ const formatUGX = (amount: number) => {
 
 const ROLL_LENGTH_METERS = 50;
 
-const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, customers = [] }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, settings, customers = [] }) => {
     const isBankerOnly = currentUser.role === 'user' && currentUser.isBanker;
     const [period, setPeriod] = useState<ReportPeriod>('today');
     const [showBankingModal, setShowBankingModal] = useState(false);
@@ -530,12 +531,12 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
         const html = `
             <html>
             <head>
-                <title>Statement of Accounts - Eko Prints</title>
+                <title>Statement of Accounts - ${settings.businessName}</title>
                 <style>
                     body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; }
-                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; white-space: pre-wrap; }
                     .logo { font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
-                    .meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 12px; background: #f9fafb; padding: 15px; border-radius: 8px; }
+                    .meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 12px; background: #f9fafb; padding: 15px; border-radius: 8px; white-space: normal; }
                     .summary { display: flex; gap: 20px; margin-bottom: 30px; }
                     .card { flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 8px; text-align: center; }
                     .card h4 { margin: 0 0 5px 0; font-size: 10px; text-transform: uppercase; color: #888; }
@@ -549,7 +550,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                 </style>
             </head>
             <body>
-                <div class="header"><div class="logo">Eko Prints</div><div>Statement of Accounts</div></div>
+                <div class="header"><div class="logo">${settings.statementHeader}</div><div>Statement of Accounts</div></div>
                 <div class="meta">
                     <div><strong>Period:</strong> ${getPeriodLabel()}<br><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
                     <div style="text-align:right"><strong>User:</strong> ${currentUser.username}<br><strong>Opening Safe Balance:</strong> ${formatUGX(openingSafeBalance)}</div>
@@ -581,6 +582,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                         ${transactions.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:20px">No transactions found</td></tr>' : ''}
                     </tbody>
                 </table>
+                <div style="margin-top:40px; text-align:center; font-size:12px; color:#666; white-space: pre-wrap;">
+                    ${settings.statementFooter}
+                </div>
             </body>
             </html>
         `;

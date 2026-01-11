@@ -11,8 +11,9 @@ import ReportsView from './components/ReportsView';
 import LoginView from './components/LoginView';
 import UserManagementView from './components/UserManagementView';
 import CalculatorView from './components/CalculatorView';
+import SettingsView from './components/SettingsView';
 import ToastContainer from './components/Toast';
-import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord } from './types';
+import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord, SystemSettings } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Firebase
@@ -45,6 +46,18 @@ const App: React.FC = () => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
     const [bankingRecords, setBankingRecords] = useState<BankingRecord[]>([]);
+    const DEFAULT_SETTINGS: SystemSettings = {
+        businessName: 'Eko Prints',
+        tagline: 'Quality Printing & Design',
+        businessEmail: 'info@ekoprints.com',
+        businessPhone: '0792832056 / 0703580516',
+        businessLocation: 'Masaka City',
+        receiptHeader: 'EKO PRINTS',
+        receiptFooter: 'Thank you for choosing Eko Prints!\nTerms: Non-returnable once sold.\nOfficial receipt issued on full payment.',
+        statementHeader: 'EKO PRINTS',
+        statementFooter: 'Thank you for your business!'
+    };
+    const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
     const [quoteNarration, setQuoteNarration] = useState('');
     const [quoteDiscount, setQuoteDiscount] = useState(0);
@@ -79,7 +92,12 @@ const App: React.FC = () => {
                 fetchData('sales').then(data => setSales((data as Sale[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[])),
-                fetchData('bankingRecords').then(data => setBankingRecords((data as BankingRecord[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())))
+                fetchData('bankingRecords').then(data => setBankingRecords((data as BankingRecord[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('settings').then(data => {
+                    if (data && data.length > 0) {
+                        setSettings(data[0] as SystemSettings);
+                    }
+                })
             ];
             await Promise.all(dataPromises);
         } catch (error) {
@@ -270,6 +288,7 @@ const App: React.FC = () => {
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
+                                settings={settings}
                             />
                         )}
                         {activeView === 'Calculator' && (
@@ -327,6 +346,7 @@ const App: React.FC = () => {
                                 onAddCustomer={(data) => createDocument('customers', { ...data, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 onUpdateCustomer={(id, data) => updateDocument('customers', id, data, setCustomers, 'Customer updated.')}
                                 onDeleteCustomer={(id) => deleteDocument('customers', id, setCustomers, 'Customer deleted.')}
+                                settings={settings}
                             />
                         )}
                         {activeView === 'Reports' && (
@@ -348,10 +368,36 @@ const App: React.FC = () => {
                                     };
                                     createDocument('bankingRecords', record, setBankingRecords, 'Banking record added.');
                                 }}
+                                settings={settings}
                             />
                         )}
                         {activeView === 'Users' && currentUser.role === 'admin' && (
                             <UserManagementView users={users} currentUser={currentUser} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} />
+                        )}
+                        {activeView === 'Settings' && currentUser.role === 'admin' && (
+                            <SettingsView
+                                settings={settings}
+                                onUpdateSettings={async (newSettings) => {
+                                    const settingsCollection = collection(db, 'settings');
+                                    const q = query(settingsCollection);
+                                    const querySnapshot = await getDocs(q);
+
+                                    if (querySnapshot.empty) {
+                                        await createDocument('settings', newSettings, (set) => {
+                                            if (typeof set === 'function') {
+                                                const dummyPrev: any[] = [];
+                                                const result = set(dummyPrev);
+                                                if (result && result.length > 0) setSettings(result[0]);
+                                            }
+                                        }, 'Settings initialized.');
+                                    } else {
+                                        const docId = querySnapshot.docs[0].id;
+                                        await updateDocument('settings', docId, newSettings, (set) => {
+                                            setSettings(newSettings);
+                                        }, 'System settings updated.');
+                                    }
+                                }}
+                            />
                         )}
                     </main>
                 </div>

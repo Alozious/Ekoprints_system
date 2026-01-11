@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment } from '../types';
+import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, SystemSettings } from '../types';
 import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
@@ -25,6 +25,7 @@ interface SalesViewProps {
     stockItems: StockItem[];
     pricingTiers: PricingTier[];
     onStockOut: (skuId: string, metersUsed: number, jobId: string, notes: string) => Promise<void>;
+    settings: SystemSettings;
 }
 
 const formatUGX = (amount: number) => {
@@ -243,7 +244,7 @@ const SearchableMaterialSelect: React.FC<{
 
 const SalesView: React.FC<SalesViewProps> = ({
     sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, clearQuote,
-    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut
+    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut, settings
 }) => {
     const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
     const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
@@ -672,8 +673,8 @@ const SalesView: React.FC<SalesViewProps> = ({
                                 <td className="px-8 py-4 text-right font-black text-gray-900 text-sm">{formatUGX(sale.total)}</td>
                                 <td className="px-8 py-4 text-center">
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${sale.status === 'Paid' ? 'bg-green-100 text-green-700' :
-                                            sale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' :
-                                                'bg-red-100 text-red-700'
+                                        sale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-red-100 text-red-700'
                                         }`}>
                                         {sale.status}
                                     </span>
@@ -1002,7 +1003,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                 </div>
             </Modal>
 
-            {selectedSale && <Invoice isOpen={isInvoiceOpen} onClose={() => setIsInvoiceOpen(false)} sale={selectedSale} />}
+            {selectedSale && <Invoice isOpen={isInvoiceOpen} onClose={() => setIsInvoiceOpen(false)} sale={selectedSale} settings={settings} />}
 
             <ConfirmationModal
                 isOpen={isConfirmDeleteOpen}

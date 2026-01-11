@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Customer, Sale } from '../types';
+import { Customer, Sale, SystemSettings } from '../types';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
 import Invoice from './Invoice';
@@ -13,6 +13,7 @@ interface CustomersViewProps {
     onAddCustomer: (customerData: Omit<Customer, 'id' | 'createdAt'>) => Promise<void | Customer>;
     onUpdateCustomer: (id: string, customerData: Omit<Customer, 'id' | 'totalSpent' | 'createdAt'>) => Promise<void>;
     onDeleteCustomer: (id: string) => Promise<void>;
+    settings: SystemSettings;
 }
 
 const formatUGX = (amount: number) => {
@@ -83,7 +84,7 @@ const EditCustomerModal: React.FC<{
     );
 };
 
-const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCustomer, onUpdateCustomer, onDeleteCustomer }) => {
+const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCustomer, onUpdateCustomer, onDeleteCustomer, settings }) => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -221,7 +222,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
         <title>Customer Statement - ${selectedCustomer.name}</title>
         <style>
           body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a2232; padding: 40px; line-height: 1.5; }
-          .header { display: flex; justify-content: space-between; border-bottom: 4px solid #1a2232; padding-bottom: 20px; margin-bottom: 30px; }
+          .header { display: flex; justify-content: space-between; border-bottom: 4px solid #1a2232; padding-bottom: 20px; margin-bottom: 30px; white-space: pre-wrap; }
           .logo { font-size: 28px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; }
           .customer-info { margin-bottom: 40px; background: #f8fafc; padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; }
           .invoice-card { margin-bottom: 40px; border: 1px solid #e2e8f0; border-radius: 15px; overflow: hidden; page-break-inside: avoid; }
@@ -241,7 +242,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
       </head>
       <body>
         <div class="header">
-          <div><div class="logo">Eko Prints</div><div>Detailed Customer Statement</div></div>
+          <div><div class="logo">${settings.statementHeader}</div><div>Detailed Customer Statement</div></div>
           <div style="text-align:right">
             <div style="font-weight:800">Generated On</div>
             <div>${new Date().toLocaleString()}</div>
@@ -332,8 +333,8 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
           </div>
         `).join('')}
         
-        <div style="margin-top:50px; text-align:center; font-size:12px; color:#64748b;">
-          This is an official document from Eko Prints. Thank you for your business.
+        <div style="margin-top:50px; text-align:center; font-size:12px; color:#64748b; white-space: pre-wrap;">
+          ${settings.statementFooter}
         </div>
       </body>
       </html>
@@ -749,6 +750,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                     isOpen={!!invoiceToView}
                     onClose={() => setInvoiceToView(null)}
                     sale={{ ...invoiceToView, customer: selectedCustomer }}
+                    settings={settings}
                 />
             )}
 

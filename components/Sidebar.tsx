@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon } from './icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon, CogIcon } from './icons';
 import { User } from '../types';
 import Logo from './Logo';
 
@@ -10,14 +10,13 @@ interface SidebarProps {
     currentUser: User;
 }
 
-const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{className?: string}>, name: string, isActive: boolean, onClick: () => void }) => (
+const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{ className?: string }>, name: string, isActive: boolean, onClick: () => void }) => (
     <button
         onClick={onClick}
-        className={`w-full flex items-center space-x-3 py-3 px-4 rounded-lg transition-colors duration-200 relative ${
-            isActive
+        className={`w-full flex items-center space-x-3 py-3 px-4 rounded-lg transition-colors duration-200 relative ${isActive
                 ? 'bg-yellow-400 text-[#1A2232] shadow-lg'
                 : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-        }`}
+            }`}
     >
         {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-white rounded-r-full"></div>}
         <Icon className="w-5 h-5" />
@@ -35,8 +34,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
         { name: 'Customers', icon: CustomersIcon },
         { name: 'Reports', icon: ReportsIcon },
         { name: 'Users', icon: UsersIcon },
+        { name: 'Settings', icon: CogIcon },
     ];
-    
+
     const userNavItems = [
         { name: 'Sales', icon: SalesIcon },
         { name: 'Calculator', icon: CalculatorIcon },

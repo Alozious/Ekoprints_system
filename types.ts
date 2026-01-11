@@ -150,3 +150,14 @@ export interface BankingRecord {
   userName?: string;
 }
 
+export interface SystemSettings {
+  businessName: string;
+  tagline: string;
+  businessEmail: string;
+  businessPhone: string;
+  businessLocation: string;
+  receiptHeader: string;
+  receiptFooter: string;
+  statementHeader: string;
+  statementFooter: string;
+}

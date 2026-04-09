@@ -8,6 +8,8 @@ interface SidebarProps {
     activeView: string;
     setActiveView: (view: string) => void;
     currentUser: User;
+    isOpen?: boolean;
+    onClose?: () => void;
 }
 
 const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{ className?: string }>, name: string, isActive: boolean, onClick: () => void }) => (
@@ -24,7 +26,11 @@ const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{ cla
     </button>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUser }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUser, isOpen = false, onClose }) => {
+    const handleNav = (view: string) => {
+        setActiveView(view);
+        if (onClose) onClose();
+    };
     const adminNavItems = [
         { name: 'Dashboard', icon: DashboardIcon },
         { name: 'Sales', icon: SalesIcon },
@@ -50,30 +56,45 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     const navItems = currentUser.role === 'admin' ? adminNavItems : userNavItems;
 
     return (
-        <aside className="w-64 bg-[#1A2232] text-white flex-shrink-0 flex-col hidden md:flex">
-            <div className="flex items-center justify-center p-4 bg-[#1A2232] border-b border-gray-700">
-                {/* Remove unsupported 'variant' prop to fix type error */}
-                <Logo className="h-16" />
-            </div>
-            <nav className="flex-1 mt-6">
-                <ul className="space-y-2">
-                    {navItems.map((item) => (
-                        <li key={item.name} className="px-4">
-                            <NavItem
-                                name={item.name}
-                                icon={item.icon}
-                                isActive={activeView === item.name}
-                                onClick={() => setActiveView(item.name)}
-                            />
-                        </li>
-                    ))}
-                </ul>
-            </nav>
-            <div className="p-4 border-t border-gray-700 text-center text-xs text-gray-400">
-                <p>&copy; {new Date().getFullYear()} Eko Prints</p>
-                <p>All rights reserved.</p>
-            </div>
-        </aside>
+        <>
+            {/* Mobile backdrop */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                    onClick={onClose}
+                />
+            )}
+
+            <aside className={`
+                w-64 bg-[#1A2232] text-white flex-shrink-0 flex flex-col
+                fixed inset-y-0 left-0 z-50
+                transition-transform duration-300 ease-in-out
+                md:static md:z-auto md:translate-x-0
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+            `}>
+                <div className="flex items-center justify-center p-4 bg-[#1A2232] border-b border-gray-700">
+                    <Logo className="h-16" />
+                </div>
+                <nav className="flex-1 mt-6 overflow-y-auto">
+                    <ul className="space-y-2">
+                        {navItems.map((item) => (
+                            <li key={item.name} className="px-4">
+                                <NavItem
+                                    name={item.name}
+                                    icon={item.icon}
+                                    isActive={activeView === item.name}
+                                    onClick={() => handleNav(item.name)}
+                                />
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+                <div className="p-4 border-t border-gray-700 text-center text-xs text-gray-400">
+                    <p>&copy; {new Date().getFullYear()} Eko Prints</p>
+                    <p>All rights reserved.</p>
+                </div>
+            </aside>
+        </>
     );
 };
 

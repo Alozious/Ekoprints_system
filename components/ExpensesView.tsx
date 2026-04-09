@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Expense, User, ExpenseCategory } from '../types';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
@@ -24,110 +24,9 @@ const formatUGX = (amount: number) => {
     return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' UGX';
 };
 
-const CategoryManager: React.FC<Pick<ExpensesViewProps, 'expenseCategories' | 'onAddExpenseCategory' | 'onUpdateExpenseCategory' | 'onDeleteExpenseCategory'>> = 
-({ expenseCategories, onAddExpenseCategory, onUpdateExpenseCategory, onDeleteExpenseCategory }) => {
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
-    const [categoryToDelete, setCategoryToDelete] = useState<ExpenseCategory | null>(null);
-    const [newCategoryName, setNewCategoryName] = useState('');
-
-    const handleAddCategory = async (e: React.FormEvent) => {
-        e.preventDefault();
-        await onAddExpenseCategory(newCategoryName);
-        setNewCategoryName('');
-        setIsAddModalOpen(false);
-    }
-    
-    const handleOpenEdit = (category: ExpenseCategory) => {
-        setEditingCategory(category);
-        setIsEditModalOpen(true);
-    }
-
-    const handleUpdateCategory = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (editingCategory) {
-            await onUpdateExpenseCategory(editingCategory.id, editingCategory.name);
-            setIsEditModalOpen(false);
-            setEditingCategory(null);
-        }
-    }
-
-    const handleDeleteClick = (category: ExpenseCategory) => {
-        setCategoryToDelete(category);
-        setIsConfirmModalOpen(true);
-    };
-
-    const confirmDelete = () => {
-        if(categoryToDelete) {
-            onDeleteExpenseCategory(categoryToDelete.id);
-            setCategoryToDelete(null);
-        }
-    };
-
-    const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-    
-    return (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden max-w-2xl mx-auto border border-gray-100">
-             <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="text-lg font-black text-gray-800 uppercase tracking-tight">Expense Categories</h3>
-                 <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all"><PlusIcon className="w-4 h-4 mr-1"/> New Category</button>
-            </div>
-            <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left text-gray-500">
-                     <thead className="text-[10px] text-gray-400 uppercase bg-gray-50 font-black tracking-widest">
-                        <tr>
-                             <th className="px-6 py-4">Category Name</th>
-                             <th className="px-6 py-4 text-right">Actions</th>
-                        </tr>
-                     </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {expenseCategories.map(cat => (
-                           <tr key={cat.id} className="hover:bg-gray-50/50 transition-colors">
-                               <td className="px-6 py-4 font-bold text-gray-900">{cat.name}</td>
-                               <td className="px-6 py-4 text-right">
-                                   <div className="flex items-center justify-end space-x-3">
-                                       <button onClick={() => handleOpenEdit(cat)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
-                                       <button onClick={() => handleDeleteClick(cat)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
-                                   </div>
-                               </td>
-                           </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            
-            <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="New Expense Category">
-                <form onSubmit={handleAddCategory} className="space-y-4">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Category Label</label>
-                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className={darkInput} required autoFocus placeholder="e.g. Electricity" />
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">Add Category</button>
-                </form>
-            </Modal>
-
-            {editingCategory && <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Modify Category">
-                <form onSubmit={handleUpdateCategory} className="space-y-4">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Category Label</label>
-                    <input type="text" value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} className={darkInput} required autoFocus />
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">Save Changes</button>
-                </form>
-            </Modal>}
-
-            <ConfirmationModal
-                isOpen={isConfirmModalOpen}
-                onClose={() => setIsConfirmModalOpen(false)}
-                onConfirm={confirmDelete}
-                title="Purge Category"
-                message={`Permanently delete "${categoryToDelete?.name}"? Ensure it's not currently linked to any historical records.`}
-            />
-        </div>
-    );
-};
 
 const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
   const { expenses, currentUser, users, expenseCategories, onAddExpense, onUpdateExpense, onDeleteExpense } = props;
-  const [activeTab, setActiveTab] = useState<'expenses' | 'categories'>('expenses');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -144,6 +43,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDateStart, setFilterDateStart] = useState('');
   const [filterDateEnd, setFilterDateEnd] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 13;
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
@@ -199,6 +100,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
         expense.userId === currentUser.id && new Date(expense.date).toDateString() === today
     );
   }, [expenses, currentUser, users, filterUser, filterCategory, filterDateStart, filterDateEnd]);
+
+  useEffect(() => { setCurrentPage(1); }, [filterUser, filterCategory, filterDateStart, filterDateEnd]);
+
+  const totalPages = Math.ceil(displayedExpenses.length / ITEMS_PER_PAGE);
+  const paginatedExpenses = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayedExpenses.slice(start, start + ITEMS_PER_PAGE);
+  }, [displayedExpenses, currentPage]);
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -292,101 +201,91 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
         }
     };
   
-  const isUserView = currentUser.role === 'user';
-  const activeBtnClass = "px-4 py-2 text-sm font-black text-yellow-700 bg-yellow-50 border-b-4 border-yellow-500 rounded-t-xl transition-all uppercase tracking-widest";
-  const inactiveBtnClass = "px-4 py-2 text-sm font-bold text-gray-400 border-b-4 border-transparent hover:text-gray-600 hover:border-gray-200 transition-all uppercase tracking-widest";
-
   const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
   const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1";
 
   return (
     <div className="space-y-6">
-        {currentUser.role === 'admin' && (
-             <div className="mb-6 border-b border-gray-100 flex items-center justify-between">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    <button onClick={() => setActiveTab('expenses')} className={activeTab === 'expenses' ? activeBtnClass : inactiveBtnClass}>Historical Log</button>
-                    <button onClick={() => setActiveTab('categories')} className={activeTab === 'categories' ? activeBtnClass : inactiveBtnClass}>Template Categories</button>
-                </nav>
-            </div>
-        )}
+            {/* Single combined header + filters row */}
+            <div className="bg-white px-4 py-3 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+                    <h2 className="text-xs font-black text-gray-900 uppercase tracking-tight shrink-0 whitespace-nowrap mr-1">
+                        Business Expenses
+                    </h2>
+                    <div className="w-px h-5 bg-gray-200 shrink-0 hidden lg:block" />
 
-      {activeTab === 'expenses' && (
-        <>
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Business Expenses</h2>
-                    {isUserView && <p className="text-gray-400 text-[10px] font-bold uppercase mt-1">Daily Log Mode • Read-Only after submission</p>}
-                </div>
-                <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-500 text-[#1A2232] px-6 py-3 rounded-2xl shadow-xl hover:bg-yellow-600 transition-all font-black uppercase text-xs tracking-widest active:scale-95 border border-yellow-600/10">
-                <PlusIcon className="w-5 h-5 mr-2" /> Add Expense
-                </button>
-            </div>
-
-            {currentUser.role === 'admin' && (
-                <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-50">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <div className="lg:col-span-1">
-                            <label className={labelStyle}>Staff Member</label>
-                            <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="block w-full rounded-xl border-gray-200 bg-gray-50 py-2 px-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none">
-                                <option value="">All Users</option>
+                    {currentUser.role === 'admin' && (
+                        <>
+                            <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
+                                className="flex-1 min-w-[100px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none">
+                                <option value="">All Staff</option>
                                 {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                             </select>
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label className={labelStyle}>Expense Type</label>
-                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="block w-full rounded-xl border-gray-200 bg-gray-50 py-2 px-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none">
+                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+                                className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none">
                                 <option value="">All Categories</option>
                                 {expenseCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
                             </select>
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label className={labelStyle}>From Date</label>
-                            <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className="block w-full rounded-xl border-gray-200 bg-gray-50 py-2 px-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none" />
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label className={labelStyle}>To Date</label>
-                            <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className="block w-full rounded-xl border-gray-200 bg-gray-50 py-2 px-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none" />
-                        </div>
-                        <div className="lg:col-span-1 flex items-end gap-2">
-                             <button onClick={handleExportCSV} className="flex items-center justify-center flex-1 bg-emerald-50 text-emerald-700 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm">
-                                <DocumentTextIcon className="w-4 h-4 mr-1.5" /> CSV
+                            <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)}
+                                className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none" />
+                            <span className="text-gray-300 font-black text-xs shrink-0">–</span>
+                            <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)}
+                                className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none" />
+                            <button onClick={handleExportCSV}
+                                className="shrink-0 flex items-center px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100 whitespace-nowrap">
+                                <DocumentTextIcon className="w-3.5 h-3.5 mr-1" /> CSV
                             </button>
-                            <button onClick={handleExportPDF} className="flex items-center justify-center flex-1 bg-rose-50 text-rose-700 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 shadow-sm">
-                                <PrintIcon className="w-4 h-4 mr-1.5" /> PDF
+                            <button onClick={handleExportPDF}
+                                className="shrink-0 flex items-center px-3 py-2 bg-rose-50 text-rose-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 whitespace-nowrap">
+                                <PrintIcon className="w-3.5 h-3.5 mr-1" /> PDF
                             </button>
-                        </div>
-                    </div>
+                        </>
+                    )}
+
+                    <button onClick={() => setIsAddModalOpen(true)}
+                        className="shrink-0 bg-yellow-500 text-[#1A2232] px-5 py-2 rounded-xl font-black flex items-center shadow-md hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-600/10 whitespace-nowrap ml-auto">
+                        <PlusIcon className="w-4 h-4 mr-1.5" /> Add Expense
+                    </button>
                 </div>
-            )}
+            </div>
 
             <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-50">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-500">
-                        <thead className="text-[10px] text-gray-400 uppercase bg-gray-50/50 font-black tracking-widest">
+                <table className="w-full text-left table-fixed">
+                    <thead className="text-[9px] text-gray-400 uppercase bg-gray-50/50 font-black tracking-widest">
                         <tr>
-                            <th scope="col" className="px-8 py-5">Record Date</th>
-                            {currentUser.role === 'admin' && <th scope="col" className="px-8 py-5">Author</th>}
-                            <th scope="col" className="px-8 py-5">Category</th>
-                            <th scope="col" className="px-8 py-5">Narration</th>
-                            <th scope="col" className="px-8 py-5 text-right">Value</th>
-                            {currentUser.role === 'admin' && <th scope="col" className="px-8 py-5 text-center">Actions</th>}
+                            <th className="px-4 py-3 w-[12%]">Date</th>
+                            {currentUser.role === 'admin' && <th className="px-4 py-3 w-[13%]">Staff</th>}
+                            <th className={`px-4 py-3 ${currentUser.role === 'admin' ? 'w-[16%]' : 'w-[20%]'}`}>Category</th>
+                            <th className="px-4 py-3">Narration</th>
+                            <th className="px-4 py-3 w-[15%] text-right">Amount</th>
+                            {currentUser.role === 'admin' && <th className="px-4 py-3 w-[10%]">Actions</th>}
                         </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                        {displayedExpenses.map((expense, index) => (
-                            <tr key={expense.id} className="bg-white hover:bg-gray-50 transition-colors slide-in-up group" style={{ animationDelay: `${index * 20}ms` }}>
-                                <td className="px-8 py-4 font-bold text-gray-600">{new Date(expense.date).toLocaleDateString([], { dateStyle: 'medium' })}</td>
-                                {currentUser.role === 'admin' && <td className="px-8 py-4 font-bold text-blue-600">{expense.userName}</td>}
-                                <td className="px-8 py-4">
-                                    <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[10px] font-black uppercase">{expense.category}</span>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {paginatedExpenses.map((expense, index) => (
+                            <tr key={expense.id} className="bg-white hover:bg-gray-50 transition-colors group" style={{ animationDelay: `${index * 20}ms` }}>
+                                <td className="px-4 py-2 font-medium text-gray-600 text-[10px]">
+                                    {new Date(expense.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
                                 </td>
-                                <th scope="row" className="px-8 py-4 font-bold text-gray-900 truncate max-w-xs">{expense.description}</th>
-                                <td className="px-8 py-4 text-right font-black text-gray-900">{formatUGX(expense.amount)}</td>
                                 {currentUser.role === 'admin' && (
-                                    <td className="px-8 py-4">
-                                        <div className="flex justify-center items-center space-x-2">
-                                            <button onClick={() => handleOpenEditModal(expense)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 hover:scale-110 transition-all"><EditIcon className="w-4 h-4"/></button>
-                                            <button onClick={() => handleDeleteClick(expense)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 hover:scale-110 transition-all"><TrashIcon className="w-4 h-4"/></button>
+                                    <td className="px-4 py-2 font-bold text-blue-600 text-[10px] truncate">{expense.userName}</td>
+                                )}
+                                <td className="px-4 py-2">
+                                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[9px] font-black uppercase truncate block w-fit max-w-full">{expense.category}</span>
+                                </td>
+                                <td className="px-4 py-2 font-medium text-gray-900 text-[10px] truncate">{expense.description}</td>
+                                <td className="px-4 py-2 text-right font-bold text-gray-900 text-[10px]">{formatUGX(expense.amount)}</td>
+                                {currentUser.role === 'admin' && (
+                                    <td className="px-4 py-2">
+                                        <div className="flex items-center justify-start gap-1">
+                                            <button onClick={() => handleOpenEditModal(expense)} title="Edit"
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                                                <EditIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => handleDeleteClick(expense)} title="Delete"
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
+                                                <TrashIcon className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     </td>
                                 )}
@@ -394,19 +293,45 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                         ))}
                         {displayedExpenses.length === 0 && (
                             <tr>
-                                <td colSpan={currentUser.role === 'admin' ? 6 : 4} className="text-center py-24 text-gray-300 font-black uppercase tracking-[0.4em] text-xs">
-                                    No expenditure flow detected
+                                <td colSpan={currentUser.role === 'admin' ? 6 : 4} className="text-center py-16 text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
+                                    No expenditure records found
                                 </td>
                             </tr>
                         )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </>
-      )}
+                    </tbody>
+                </table>
 
-      {currentUser.role === 'admin' && activeTab === 'categories' && <CategoryManager {...props} />}
+                {/* Pagination Controls */}
+                {displayedExpenses.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-50">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                            Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, displayedExpenses.length)} of {displayedExpenses.length} records
+                        </p>
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">‹</button>
+                                {(() => {
+                                    const pages: number[] = [];
+                                    const maxVisible = 5;
+                                    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                                    let end = Math.min(totalPages, start + maxVisible - 1);
+                                    if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
+                                    for (let i = start; i <= end; i++) pages.push(i);
+                                    return pages.map(page => (
+                                        <button key={page} onClick={() => setCurrentPage(page)}
+                                            className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
+                                            {page}
+                                        </button>
+                                    ));
+                                })()}
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">›</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
 
       {/* Add New Expense Modal - High Contrast Dark Inputs */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="New Disbursement Entry">

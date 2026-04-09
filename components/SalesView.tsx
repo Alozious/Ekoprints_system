@@ -279,6 +279,8 @@ const SalesView: React.FC<SalesViewProps> = ({
     const [filterDateEnd, setFilterDateEnd] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [dateMode, setDateMode] = useState<'any' | 'specific' | 'range'>('any');
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 13;
 
     const { addToast } = useToast();
 
@@ -539,176 +541,260 @@ const SalesView: React.FC<SalesViewProps> = ({
         return list;
     }, [sales, currentUser, filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery, customers]);
 
+    // Reset to first page whenever filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery]);
+
+    const totalPages = Math.ceil(filteredSales.length / ITEMS_PER_PAGE);
+    const paginatedSales = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredSales.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredSales, currentPage]);
+
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Sales Operations</h2>
-                <button
-                    onClick={() => setIsAddSaleOpen(true)}
-                    className="bg-yellow-500 text-[#1A2232] px-8 py-3.5 rounded-2xl font-black flex items-center shadow-xl hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-xs border border-yellow-600/10"
-                >
-                    <PlusIcon className="w-5 h-5 mr-3" /> New Transaction
-                </button>
-            </div>
+        <div className="space-y-4">
+            {/* Single combined header + filters row */}
+            <div className="bg-white px-4 py-3 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
 
-            {/* Optimized Filters Area */}
-            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                    <div className="relative">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Quick Search</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                placeholder="Invoice # or Customer..."
-                                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
-                            />
-                            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        </div>
+                    {/* Title */}
+                    <h2 className="text-xs font-black text-gray-900 uppercase tracking-tight shrink-0 whitespace-nowrap mr-1">
+                        Sales Operations
+                    </h2>
+                    <div className="w-px h-5 bg-gray-200 shrink-0 hidden lg:block" />
+
+                    {/* Search */}
+                    <div className="relative flex-[2] min-w-[130px]">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Invoice # or Customer..."
+                            className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                        />
+                        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     </div>
 
-                    <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Status</label>
-                        <select
-                            value={filterStatus}
-                            onChange={e => setFilterStatus(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
-                        >
-                            <option value="All">All Statuses</option>
-                            <option value="Paid">Fully Paid</option>
-                            <option value="Partially Paid">Partial</option>
-                            <option value="Unpaid">Arrears</option>
-                        </select>
-                    </div>
+                    {/* Status */}
+                    <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value)}
+                        className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                    >
+                        <option value="All">All Statuses</option>
+                        <option value="Paid">Fully Paid</option>
+                        <option value="Partially Paid">Partial</option>
+                        <option value="Unpaid">Arrears</option>
+                    </select>
 
+                    {/* Sales Rep (admin only) */}
                     {currentUser.role === 'admin' && (
-                        <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Sales Rep</label>
-                            <select
-                                value={filterUser}
-                                onChange={e => setFilterUser(e.target.value)}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
-                            >
-                                <option value="All">All Staff</option>
-                                {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                            </select>
+                        <select
+                            value={filterUser}
+                            onChange={e => setFilterUser(e.target.value)}
+                            className="flex-1 min-w-[100px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                        >
+                            <option value="All">All Staff</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                        </select>
+                    )}
+
+                    {/* Date mode */}
+                    <select
+                        value={dateMode}
+                        onChange={e => {
+                            const mode = e.target.value as any;
+                            setDateMode(mode);
+                            if (mode === 'any') { setFilterDateStart(''); setFilterDateEnd(''); }
+                            else if (mode === 'specific' && filterDateStart) setFilterDateEnd(filterDateStart);
+                        }}
+                        className="min-w-[100px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                    >
+                        <option value="any">Any Date</option>
+                        <option value="specific">Specific Date</option>
+                        <option value="range">Date Range</option>
+                    </select>
+
+                    {/* Date inputs or placeholder — all on same row, same height */}
+                    {dateMode === 'specific' && (
+                        <input type="date" value={filterDateStart} onChange={e => { setFilterDateStart(e.target.value); setFilterDateEnd(e.target.value); }}
+                            className="flex-1 min-w-[120px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
+                    )}
+                    {dateMode === 'range' && (
+                        <>
+                            <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)}
+                                className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
+                            <span className="text-gray-300 font-black text-xs shrink-0">–</span>
+                            <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)}
+                                className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
+                        </>
+                    )}
+                    {dateMode === 'any' && (
+                        <div className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center text-gray-300 text-[9px] font-black uppercase tracking-widest">
+                            No Filter Active
                         </div>
                     )}
 
-                    <div className={`${currentUser.role === 'admin' ? 'lg:col-span-2' : 'lg:col-span-3'} flex gap-2`}>
-                        <div className="w-1/3">
-                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Date Filter</label>
-                            <select
-                                value={dateMode}
-                                onChange={e => {
-                                    const mode = e.target.value as any;
-                                    setDateMode(mode);
-                                    if (mode === 'any') {
-                                        setFilterDateStart('');
-                                        setFilterDateEnd('');
-                                    } else if (mode === 'specific') {
-                                        if (filterDateStart) setFilterDateEnd(filterDateStart);
-                                    }
-                                }}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
-                            >
-                                <option value="any">Any Date</option>
-                                <option value="specific">Specific Date</option>
-                                <option value="range">Date Range</option>
-                            </select>
-                        </div>
-
-                        {dateMode === 'specific' && (
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">Select Date</label>
-                                <input type="date" value={filterDateStart} onChange={e => { setFilterDateStart(e.target.value); setFilterDateEnd(e.target.value); }} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
-                            </div>
-                        )}
-
-                        {dateMode === 'range' && (
-                            <>
-                                <div className="flex-1">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">From</label>
-                                    <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-2">To</label>
-                                    <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all" />
-                                </div>
-                            </>
-                        )}
-
-                        {dateMode === 'any' && <div className="flex-1 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center text-gray-300 text-[10px] font-black uppercase tracking-widest">No Date Filter Active</div>}
-                    </div>
+                    {/* New Transaction button */}
+                    <button
+                        onClick={() => setIsAddSaleOpen(true)}
+                        className="shrink-0 bg-yellow-500 text-[#1A2232] px-5 py-2 rounded-xl font-black flex items-center shadow-md hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-600/10 whitespace-nowrap"
+                    >
+                        <PlusIcon className="w-4 h-4 mr-1.5" /> New Transaction
+                    </button>
                 </div>
             </div>
 
             <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[10px] tracking-[0.15em]">
+                <table className="w-full text-left table-fixed">
+                    <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-[0.12em]">
                         <tr>
-                            <th className="px-8 py-5">Invoice Ref</th>
-                            <th className="px-8 py-5">Client Name</th>
-                            <th className="px-8 py-5">Record Date</th>
-                            <th className="px-8 py-5 text-right">Value</th>
-                            <th className="px-8 py-5 text-center">Status</th>
-                            <th className="px-8 py-5 text-center">Actions</th>
+                            <th className="px-4 py-3 w-[10%]">Ref</th>
+                            <th className="px-4 py-3 w-[22%]">Client</th>
+                            <th className="px-4 py-3 w-[14%]">Date</th>
+                            <th className="px-4 py-3 w-[14%] text-right">Value</th>
+                            <th className="px-4 py-3 w-[14%] text-right">Balance</th>
+                            <th className="px-4 py-3 w-[10%] text-center">Status</th>
+                            <th className="px-4 py-3 w-[16%]">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {filteredSales.map(sale => (
-                            <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-8 py-4 font-mono font-bold text-blue-600 text-xs">#{sale.id.substring(0, 8).toUpperCase()}</td>
-                                <td className="px-8 py-4">
-                                    <p className="font-black text-gray-900 text-sm uppercase tracking-tight">{customers.find(c => c.id === sale.customerId)?.name || 'Guest User'}</p>
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Contact: {customers.find(c => c.id === sale.customerId)?.phone || '-'}</p>
-                                </td>
-                                <td className="px-8 py-4 text-gray-600 font-bold text-[11px]">
-                                    {new Date(sale.date).toLocaleDateString([], { dateStyle: 'medium' })}
-                                    <span className="block text-[10px] text-gray-400 font-medium mt-0.5 uppercase">
-                                        {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </td>
-                                <td className="px-8 py-4 text-right font-black text-gray-900 text-sm">{formatUGX(sale.total)}</td>
-                                <td className="px-8 py-4 text-center">
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${sale.status === 'Paid' ? 'bg-green-100 text-green-700' :
-                                        sale.status === 'Partially Paid' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-red-100 text-red-700'
-                                        }`}>
-                                        {sale.status}
-                                    </span>
-                                </td>
-                                <td className="px-8 py-4 text-center">
-                                    <div className="flex justify-center gap-2">
-                                        <button onClick={() => handleViewInvoice(sale)} className="p-2.5 text-gray-900 hover:text-blue-600 transition-all bg-blue-50/50 rounded-xl hover:scale-110" title="Review Invoice"><DocumentTextIcon className="w-5 h-5" /></button>
-
-                                        {currentUser.role === 'admin' ? (
-                                            <button onClick={() => handleOpenEditInvoice(sale)} className="p-2.5 text-gray-900 hover:text-orange-600 transition-all bg-orange-50/50 rounded-xl hover:scale-110" title="Edit Invoice Contents"><EditIcon className="w-5 h-5" /></button>
+                        {paginatedSales.map(sale => {
+                            const balance = sale.total - (sale.amountPaid || 0);
+                            const customer = customers.find(c => c.id === sale.customerId);
+                            return (
+                                <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
+                                    <td className="px-4 py-2 font-mono font-bold text-blue-600 text-[10px] truncate">
+                                        #{sale.id.substring(0, 7).toUpperCase()}
+                                    </td>
+                                    <td className="px-4 py-2">
+                                        <p className="font-bold text-gray-900 text-[11px] uppercase truncate">{customer?.name || 'Guest'}</p>
+                                        <p className="text-[9px] text-gray-400 font-medium truncate">
+                                            {customer?.phone || '—'}
+                                        </p>
+                                    </td>
+                                    <td className="px-4 py-2 text-gray-600 font-medium text-[10px]">
+                                        {new Date(sale.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
+                                        <span className="block text-[9px] text-gray-400">
+                                            {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-right font-bold text-gray-900 text-[10px]">
+                                        {formatUGX(sale.total)}
+                                    </td>
+                                    <td className="px-4 py-2 text-right">
+                                        {balance > 0 ? (
+                                            <span className="font-bold text-rose-600 text-[10px]">{formatUGX(balance)}</span>
                                         ) : (
-                                            <button onClick={() => handleOpenNarration(sale)} className="p-2.5 text-gray-900 hover:text-purple-600 transition-all bg-purple-50/50 rounded-xl hover:scale-110" title="Job Production Notes"><EditIcon className="w-5 h-5" /></button>
+                                            <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold text-[9px] uppercase">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                Settled
+                                            </span>
                                         )}
-
-                                        {sale.status !== 'Paid' && (
-                                            <button onClick={() => handleOpenPayment(sale)} className="p-2.5 text-gray-900 hover:text-green-600 transition-all bg-green-50/50 rounded-xl hover:scale-110" title="Receive Payment"><BanknotesIcon className="w-5 h-5" /></button>
-                                        )}
-                                        {isLoggable(sale) && (
-                                            <button onClick={() => handleOpenUsageModal(sale)} className="p-2.5 text-red-600 hover:text-red-700 transition-all bg-red-50/50 rounded-xl animate-blink" title="Consumption Log (Urgent)"><BeakerIcon className="w-5 h-5" /></button>
-                                        )}
-                                        {currentUser.role === 'admin' && (
-                                            <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} className="p-2.5 text-gray-900 hover:text-red-600 transition-all bg-red-50/50 rounded-xl hover:scale-110" title="Purge Record"><TrashIcon className="w-5 h-5" /></button>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tight ${
+                                            sale.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
+                                            sale.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
+                                            'bg-rose-100 text-rose-700'
+                                        }`}>
+                                            {sale.status === 'Partially Paid' ? 'Partial' : sale.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-2">
+                                        <div className="flex items-center justify-start gap-1">
+                                            <button onClick={() => handleViewInvoice(sale)} title="View Invoice"
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
+                                                <DocumentTextIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                            {currentUser.role === 'admin' ? (
+                                                <button onClick={() => handleOpenEditInvoice(sale)} title="Edit Invoice"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                                                    <EditIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            ) : (
+                                                <button onClick={() => handleOpenNarration(sale)} title="Notes"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-violet-50 text-violet-500 hover:bg-violet-100 transition-all active:scale-90">
+                                                    <EditIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {sale.status !== 'Paid' && (
+                                                <button onClick={() => handleOpenPayment(sale)} title="Receive Payment"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
+                                                    <BanknotesIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {isLoggable(sale) && (
+                                                <button onClick={() => handleOpenUsageModal(sale)} title="Log Usage"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 animate-blink active:scale-90">
+                                                    <BeakerIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {currentUser.role === 'admin' && (
+                                                <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} title="Delete"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {filteredSales.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-8 py-24 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Zero transactional flow detected</td>
+                                <td colSpan={7} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
+                                    No records found
+                                </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                {filteredSales.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-50">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                            {filteredSales.length === 0 ? 'No records' : `Showing ${((currentPage - 1) * ITEMS_PER_PAGE) + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredSales.length)} of ${filteredSales.length} records`}
+                        </p>
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm"
+                                >
+                                    ‹
+                                </button>
+                                {(() => {
+                                    const pages: number[] = [];
+                                    const maxVisible = 5;
+                                    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                                    let end = Math.min(totalPages, start + maxVisible - 1);
+                                    if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
+                                    for (let i = start; i <= end; i++) pages.push(i);
+                                    return pages.map(page => (
+                                        <button
+                                            key={page}
+                                            onClick={() => setCurrentPage(page)}
+                                            className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                                        >
+                                            {page}
+                                        </button>
+                                    ));
+                                })()}
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm"
+                                >
+                                    ›
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Admin Edit Invoice Modal - Powerful Inline Editor */}

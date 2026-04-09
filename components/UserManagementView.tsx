@@ -167,61 +167,59 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, currentU
   const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">System Access Registry</h2>
-        <button onClick={() => setIsAddModalOpen(true)} className="bg-yellow-500 text-[#1A2232] px-8 py-3.5 rounded-2xl font-black flex items-center shadow-xl hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-xs border border-yellow-600/10">
-            <PlusIcon className="w-5 h-5 mr-3"/> Add User
-        </button>
+    <div className="space-y-4">
+      {/* Merged header bar */}
+      <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-3">
+        <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">System Access Registry</span>
+        <div className="ml-auto">
+          <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
+            <PlusIcon className="w-3.5 h-3.5 mr-1" /> Add User
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[10px] tracking-[0.2em]">
-                <tr>
-                    <th scope="col" className="px-8 py-5">Username</th>
-                    <th scope="col" className="px-8 py-5">Email Address</th>
-                    <th scope="col" className="px-8 py-5">Role & Clearance</th>
-                    <th scope="col" className="px-8 py-5 text-center">Actions</th>
-                </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                {users.map((user, index) => (
-                    <tr key={user.id} className="bg-white hover:bg-gray-50/50 transition-colors slide-in-up" style={{ animationDelay: `${index * 20}ms` }}>
-                        <th scope="row" className="px-8 py-5 font-black text-gray-900 uppercase tracking-tight">{user.username}</th>
-                        <td className="px-8 py-5 text-gray-500 font-medium">{user.email}</td>
-                        <td className="px-8 py-5">
-                            <div className="flex items-center gap-2">
-                                <span className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-tight rounded-full border ${user.role === 'admin' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
-                                    {user.role}
-                                </span>
-                                {user.isBanker && (
-                                    <span className="px-4 py-1.5 text-[9px] font-black uppercase tracking-tight rounded-full bg-purple-50 text-purple-600 border border-purple-100">
-                                        Banker
-                                    </span>
-                                )}
-                            </div>
-                        </td>
-                        <td className="px-8 py-5 text-center">
-                          <button
-                            onClick={() => handleOpenEditModal(user)}
-                            className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all hover:scale-110 shadow-sm"
-                            title="Edit Identity"
-                          >
-                            <EditIcon className="w-5 h-5" />
-                          </button>
-                        </td>
-                    </tr>
-                ))}
-                {users.length === 0 && (
-                    <tr>
-                        <td colSpan={4} className="px-8 py-24 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">No personnel registered in the system</td>
-                    </tr>
-                )}
-                </tbody>
-            </table>
-        </div>
+      <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
+        <table className="w-full table-fixed text-left">
+          <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-widest">
+            <tr>
+              <th className="px-4 py-3 w-[22%]">Username</th>
+              <th className="px-4 py-3 w-[34%]">Email Address</th>
+              <th className="px-4 py-3 w-[36%]">Role & Clearance</th>
+              <th className="px-4 py-3 w-[8%]">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {users.map((user) => (
+              <tr key={user.id} className="bg-white hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-2 text-[10px] font-black text-gray-900 uppercase truncate">{user.username}</td>
+                <td className="px-4 py-2 text-[10px] text-gray-500 font-medium truncate">{user.email}</td>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-tight rounded-full border ${user.role === 'admin' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                      {user.role}
+                    </span>
+                    {user.isBanker && (
+                      <span className="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-tight rounded-full bg-purple-50 text-purple-600 border border-purple-100">
+                        Banker
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-2">
+                  <button onClick={() => handleOpenEditModal(user)} title="Edit User"
+                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                    <EditIcon className="w-3.5 h-3.5" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">No personnel registered</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
       
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Register New Personnel">

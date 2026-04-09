@@ -7,9 +7,10 @@ interface HeaderProps {
     pageTitle: string;
     currentUser: User;
     onLogout: () => void;
+    onMenuClick?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMenuClick }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     return (
@@ -17,7 +18,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout }) => 
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-full">
                 <div className="flex items-center justify-between h-full">
                     <div className="flex items-center">
-                        <button className="md:hidden mr-4 text-gray-600">
+                        <button className="md:hidden mr-4 text-gray-600 hover:text-gray-900 transition-colors" onClick={onMenuClick}>
                             <MenuIcon className="w-6 h-6" />
                         </button>
                         <h1 className="text-xl font-semibold text-gray-800 hidden md:block">

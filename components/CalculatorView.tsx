@@ -399,7 +399,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                 <p className="text-lg font-black text-gray-700">{(areaInSqCm).toLocaleString()} <span className="text-xs text-gray-400">cm²</span> | {(areaInSqCm / 10000).toFixed(4)} <span className="text-xs text-gray-400">m²</span></p>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className={labelClass}>Material</label>
                                     <div className="relative">
@@ -420,16 +420,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
                                     </div>
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className={labelClass}>Negotiated Unit Price</label>
                                     <div className="relative">
-                                        <input 
-                                            type="text" 
-                                            value={formatNumberWithCommas(negotiatedDimPrice)} 
-                                            onChange={e => setNegotiatedDimPrice(parseCommaString(e.target.value))} 
+                                        <input
+                                            type="text"
+                                            value={formatNumberWithCommas(negotiatedDimPrice)}
+                                            onChange={e => setNegotiatedDimPrice(parseCommaString(e.target.value))}
                                             className={darkInputClass}
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded shadow-sm pointer-events-none animate-pulse">
@@ -437,13 +434,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className={labelClass}>Quantity</label>
                                     <input type="number" min="1" value={dimQuantity} onChange={e => setDimQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className={labelClass}>Extra Fee</label>
                                     <input type="text" value={formatNumberWithCommas(extraAmount)} onChange={e => setExtraAmount(parseCommaString(e.target.value))} className={darkInputClass} placeholder="0" />
@@ -454,20 +451,21 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                 </div>
                             </div>
 
-                            <div className="p-1 bg-blue-600 rounded-[1.8rem] shadow-xl transform transition-all hover:scale-[1.02]">
-                                <div className="bg-blue-600/90 border border-white/20 rounded-[1.6rem] p-6 text-center text-white relative overflow-hidden">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60 mb-2">Total Item Value</p>
-                                    <div className="flex items-center justify-center gap-3">
-                                        <span className="text-4xl font-black tracking-tighter">{formatNumberWithCommas(totalDimPrice)}</span>
-                                        <span className="text-2xl font-black opacity-90">UGX</span>
+                            <div className="flex items-stretch gap-3">
+                                <div className="flex-1 p-1 bg-blue-600 rounded-[1.8rem] shadow-xl">
+                                    <div className="bg-blue-600/90 border border-white/20 rounded-[1.6rem] px-6 py-4 text-center text-white relative overflow-hidden h-full flex flex-col justify-center">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60 mb-1">Total Item Value</p>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-3xl font-black tracking-tighter">{formatNumberWithCommas(totalDimPrice)}</span>
+                                            <span className="text-xl font-black opacity-90">UGX</span>
+                                        </div>
+                                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
                                     </div>
-                                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
                                 </div>
+                                <button onClick={handleAddDimToQuote} className="flex-1 bg-[#1A2232] text-yellow-400 font-black rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-[0.25em] text-xs border border-yellow-400/10 px-4">
+                                    Append To Scratchpad
+                                </button>
                             </div>
-                            
-                            <button onClick={handleAddDimToQuote} className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-[0.25em] text-xs border border-yellow-400/10">
-                                Append To Scratchpad
-                            </button>
                         </div>
                     )}
 

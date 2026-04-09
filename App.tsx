@@ -29,6 +29,7 @@ export const useToast = () => useContext(ToastContext);
 
 const App: React.FC = () => {
     const [activeView, setActiveView] = useState('Dashboard');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [appLoading, setAppLoading] = useState(true);
     const [operationLoading, setOperationLoading] = useState(false);
@@ -276,9 +277,9 @@ const App: React.FC = () => {
     return (
         <ToastContext.Provider value={{ addToast }}>
             <div className="flex h-screen bg-[#F4F7F9] overflow-hidden">
-                <Sidebar activeView={activeView} setActiveView={setActiveView} currentUser={currentUser} />
+                <Sidebar activeView={activeView} setActiveView={setActiveView} currentUser={currentUser} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <Header pageTitle={activeView} currentUser={currentUser} onLogout={handleLogout} />
+                    <Header pageTitle={activeView} currentUser={currentUser} onLogout={handleLogout} onMenuClick={() => setIsSidebarOpen(true)} />
                     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F4F7F9] p-4 sm:p-6 lg:p-8">
                         {operationLoading && <div className="fixed inset-0 bg-black bg-opacity-20 z-50 flex items-center justify-center"><div className="bg-white p-4 rounded-lg shadow-lg flex items-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>Processing...</div></div>}
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
@@ -397,6 +398,10 @@ const App: React.FC = () => {
                                         }, 'System settings updated.');
                                     }
                                 }}
+                                expenseCategories={expenseCategories}
+                                onAddExpenseCategory={(name) => createDocument('expenseCategories', { name }, setExpenseCategories, 'Category added.')}
+                                onUpdateExpenseCategory={(id, name) => updateDocument('expenseCategories', id, { name }, setExpenseCategories, 'Category updated.')}
+                                onDeleteExpenseCategory={(id) => deleteDocument('expenseCategories', id, setExpenseCategories, 'Category deleted.')}
                             />
                         )}
                     </main>

@@ -67,6 +67,14 @@
   .animate-blink {
     animation: blink 1.2s infinite ease-in-out;
   }
+  /* Hide scrollbar for filter pill rows on mobile */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 </style>
 </head>
   <body class="bg-[#F4F7F9]">

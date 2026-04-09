@@ -105,6 +105,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
     const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
     const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 13;
+
     const [newCustomer, setNewCustomer] = useState<Omit<Customer, 'id' | 'createdAt'>>({
         name: '',
         email: '',
@@ -172,6 +175,11 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
             }
         });
     }, [customersWithStats, sortOrder, searchQuery, filterDateStart, filterDateEnd, showDebtorsOnly]);
+
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, sortOrder, filterDateStart, filterDateEnd, showDebtorsOnly]);
+
+    const totalPages = Math.ceil(sortedCustomers.length / ITEMS_PER_PAGE);
+    const paginatedCustomers = sortedCustomers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     // Fix: Define customerSales to resolve the "Cannot find name 'customerSales'" error in lines 509 and 522
     const customerSales = useMemo(() => {
@@ -469,150 +477,149 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
         }
     };
 
-    const darkFilterInput = "block w-full rounded-xl border-none bg-[#374151] p-2.5 text-xs font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-400";
-    const darkSearchInput = "block w-full rounded-xl border-none bg-[#374151] pl-10 pr-4 py-2.5 text-xs font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-400";
-    const labelStyle = "text-[10px] font-black text-gray-400 uppercase tracking-widest";
+    const filterInputClass = "h-[34px] rounded-xl border-none bg-[#374151] px-3 text-[10px] font-bold text-white focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-400";
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Customer Management</h2>
-                <button onClick={() => setIsAddModalOpen(true)} className="bg-yellow-500 text-[#1A2232] px-8 py-3 rounded-2xl font-black flex items-center shadow-xl hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-xs border border-yellow-600/10">
-                    <PlusIcon className="w-5 h-5 mr-3" /> Add Customer
-                </button>
-            </div>
+        <div className="space-y-4">
+            {/* Merged header bar */}
+            <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap mr-1">Customer Management</span>
+                <div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
 
-            <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-50 space-y-4">
-                <div className="flex flex-wrap items-end gap-5">
-                    <div className="flex flex-col gap-1.5">
-                        <label className={labelStyle}>Sort by:</label>
-                        <select
-                            value={sortOrder}
-                            onChange={e => setSortOrder(e.target.value)}
-                            className={darkFilterInput}
-                        >
-                            <option value="date-desc">Date (Newest First)</option>
-                            <option value="date-asc">Date (Oldest First)</option>
-                            <option value="spending-desc">Highest Spending</option>
-                            <option value="spending-asc">Lowest Spending</option>
-                            <option value="debt-desc">Highest Debt</option>
-                            <option value="name-asc">Name (A-Z)</option>
-                            <option value="name-desc">Name (Z-A)</option>
-                        </select>
-                    </div>
-
-                    <div className="flex-grow max-w-sm flex flex-col gap-1.5">
-                        <label className={labelStyle}>Global Search:</label>
-                        <div className="relative">
-                            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search by name, phone, or address..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className={darkSearchInput}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center h-[38px]">
-                        <label className="flex items-center cursor-pointer group">
-                            <div className="relative">
-                                <input
-                                    type="checkbox"
-                                    checked={showDebtorsOnly}
-                                    onChange={e => setShowDebtorsOnly(e.target.checked)}
-                                    className="sr-only"
-                                />
-                                <div className={`w-10 h-5 bg-gray-200 rounded-full shadow-inner transition-colors ${showDebtorsOnly ? 'bg-red-500' : ''}`}></div>
-                                <div className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${showDebtorsOnly ? 'translate-x-5' : ''}`}></div>
-                            </div>
-                            <span className="ml-3 text-[11px] font-black text-red-600 uppercase tracking-widest group-hover:text-red-700">Show Debtors Only</span>
-                        </label>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                        <label className={labelStyle}>Date From:</label>
-                        <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className={darkFilterInput} />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                        <label className={labelStyle}>To:</label>
-                        <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className={darkFilterInput} />
-                    </div>
+                {/* Search */}
+                <div className="relative flex-1 min-w-[140px] max-w-[220px]">
+                    <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input type="text" placeholder="Search customers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                        className="h-[34px] w-full rounded-xl border-none bg-[#374151] pl-8 pr-3 text-[10px] font-bold text-white focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-400" />
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-                    <label className="flex items-center cursor-pointer group">
-                        <div className="relative">
-                            <input
-                                type="checkbox"
-                                checked={includeHistory}
-                                onChange={e => setIncludeHistory(e.target.checked)}
-                                className="sr-only"
-                            />
-                            <div className={`w-10 h-5 bg-gray-200 rounded-full shadow-inner transition-colors ${includeHistory ? 'bg-blue-500' : ''}`}></div>
-                            <div className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${includeHistory ? 'translate-x-5' : ''}`}></div>
-                        </div>
-                        <span className="ml-3 text-[10px] font-black text-gray-500 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Include purchase history</span>
-                    </label>
+                {/* Sort */}
+                <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className={filterInputClass}>
+                    <option value="date-desc">Newest First</option>
+                    <option value="date-asc">Oldest First</option>
+                    <option value="spending-desc">Top Spenders</option>
+                    <option value="spending-asc">Low Spenders</option>
+                    <option value="debt-desc">Highest Debt</option>
+                    <option value="name-asc">Name A-Z</option>
+                    <option value="name-desc">Name Z-A</option>
+                </select>
 
-                    <div className="flex items-center gap-3">
-                        <button onClick={handleExportCSV} className="flex items-center bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100">
-                            <DocumentTextIcon className="w-4 h-4 mr-2" /> CSV
-                        </button>
-                        <button onClick={handleExportPDF} className="flex items-center bg-rose-50 text-rose-700 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100">
-                            <PrintIcon className="w-4 h-4 mr-2" /> PDF
-                        </button>
+                {/* Date range */}
+                <input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className={filterInputClass} />
+                <span className="text-[10px] font-black text-gray-300">—</span>
+                <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className={filterInputClass} />
+
+                {/* Debtors toggle */}
+                <label className="flex items-center cursor-pointer gap-1.5 ml-1">
+                    <div className="relative">
+                        <input type="checkbox" checked={showDebtorsOnly} onChange={e => setShowDebtorsOnly(e.target.checked)} className="sr-only" />
+                        <div className={`w-8 h-4 rounded-full shadow-inner transition-colors ${showDebtorsOnly ? 'bg-red-500' : 'bg-gray-200'}`}></div>
+                        <div className={`absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${showDebtorsOnly ? 'translate-x-4' : ''}`}></div>
                     </div>
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest whitespace-nowrap">Debtors Only</span>
+                </label>
+
+                {/* History toggle */}
+                <label className="flex items-center cursor-pointer gap-1.5 ml-1">
+                    <div className="relative">
+                        <input type="checkbox" checked={includeHistory} onChange={e => setIncludeHistory(e.target.checked)} className="sr-only" />
+                        <div className={`w-8 h-4 rounded-full shadow-inner transition-colors ${includeHistory ? 'bg-blue-500' : 'bg-gray-200'}`}></div>
+                        <div className={`absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${includeHistory ? 'translate-x-4' : ''}`}></div>
+                    </div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">w/ History</span>
+                </label>
+
+                <div className="ml-auto flex items-center gap-2">
+                    <button onClick={handleExportCSV} className="flex items-center bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100">
+                        <DocumentTextIcon className="w-3.5 h-3.5 mr-1" /> CSV
+                    </button>
+                    <button onClick={handleExportPDF} className="flex items-center bg-rose-50 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100">
+                        <PrintIcon className="w-3.5 h-3.5 mr-1" /> PDF
+                    </button>
+                    <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
+                        <PlusIcon className="w-3.5 h-3.5 mr-1" /> Add Customer
+                    </button>
                 </div>
             </div>
 
             <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-[10px] text-gray-400 uppercase bg-gray-50/50 font-black tracking-widest">
-                            <tr>
-                                <th className="px-8 py-5">Name</th>
-                                <th className="px-8 py-5">Contact</th>
-                                <th className="px-8 py-5">Address</th>
-                                <th className="px-8 py-5">Registered On</th>
-                                <th className="px-8 py-5 text-right">Total Spent</th>
-                                <th className="px-8 py-5 text-right">Debt</th>
-                                <th className="px-8 py-5 text-center">Actions</th>
+                <table className="w-full table-fixed text-left">
+                    <thead className="text-[9px] text-gray-400 uppercase bg-gray-50 font-black tracking-widest">
+                        <tr>
+                            <th className="px-4 py-3 w-[20%]">Name</th>
+                            <th className="px-4 py-3 w-[18%]">Contact</th>
+                            <th className="px-4 py-3 w-[18%]">Address</th>
+                            <th className="px-4 py-3 w-[12%]">Registered</th>
+                            <th className="px-4 py-3 w-[14%] text-right">Total Spent</th>
+                            <th className="px-4 py-3 w-[10%] text-right">Debt</th>
+                            <th className="px-4 py-3 w-[8%]">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {paginatedCustomers.map((customer) => (
+                            <tr key={customer.id} className="bg-white hover:bg-gray-50 transition-colors">
+                                <td className="px-4 py-2 text-[10px] font-black text-gray-900 uppercase truncate">{customer.name}</td>
+                                <td className="px-4 py-2">
+                                    <div className="text-[10px] text-blue-600 font-bold truncate">{customer.email}</div>
+                                    <div className="text-[9px] text-gray-400 font-black uppercase truncate">{customer.phone}</div>
+                                </td>
+                                <td className="px-4 py-2 text-[10px] font-bold text-gray-500 truncate">{customer.address}</td>
+                                <td className="px-4 py-2 text-[10px] text-gray-400 font-medium">{new Date(customer.createdAt).toLocaleDateString()}</td>
+                                <td className="px-4 py-2 text-right text-[10px] font-black text-gray-900">{formatUGX(customer.totalSpent || 0)}</td>
+                                <td className={`px-4 py-2 text-right text-[10px] font-black ${(customer.outstandingDebt || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                    {(customer.outstandingDebt || 0) > 0 ? formatUGX(customer.outstandingDebt || 0) : '✓'}
+                                </td>
+                                <td className="px-4 py-2">
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => handleViewDetails(customer)} title="Details"
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
+                                            <DocumentTextIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => handleOpenEditModal(customer)} title="Edit"
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                                            <EditIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => handleDeleteClick(customer)} title="Delete"
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
+                                            <TrashIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {sortedCustomers.map((customer, index) => (
-                                <tr key={customer.id} className="bg-white hover:bg-gray-50 transition-colors slide-in-up" style={{ animationDelay: `${index * 20}ms` }}>
-                                    <td className="px-8 py-4 font-black text-gray-900 uppercase tracking-tight">{customer.name}</td>
-                                    <td className="px-8 py-4">
-                                        <div className="text-blue-600 font-bold text-[11px]">{customer.email}</div>
-                                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-0.5">{customer.phone}</div>
-                                    </td>
-                                    <td className="px-8 py-4 text-[11px] font-black text-gray-500 uppercase">{customer.address}</td>
-                                    <td className="px-8 py-4 text-[11px] text-gray-400 font-medium">{new Date(customer.createdAt).toLocaleDateString()}</td>
-                                    <td className="px-8 py-4 text-right font-black text-gray-900">{formatUGX(customer.totalSpent || 0)}</td>
-                                    <td className={`px-8 py-4 text-right font-black ${(customer.outstandingDebt || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                        {(customer.outstandingDebt || 0) > 0 ? formatUGX(customer.outstandingDebt || 0) : '-'}
-                                    </td>
-                                    <td className="px-8 py-4 text-center">
-                                        <div className="flex justify-center items-center space-x-3">
-                                            <button onClick={() => handleViewDetails(customer)} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-800 hover:underline">Details</button>
-                                            <button onClick={() => handleOpenEditModal(customer)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 hover:scale-110 transition-all" title="Edit Customer"><EditIcon className="w-4 h-4" /></button>
-                                            <button onClick={() => handleDeleteClick(customer)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 hover:scale-110 transition-all" title="Delete Customer"><TrashIcon className="w-4 h-4" /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {sortedCustomers.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="px-8 py-24 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Zero Client Footprint Detected</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                        ))}
+                        {sortedCustomers.length === 0 && (
+                            <tr>
+                                <td colSpan={7} className="px-4 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">No customers found</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-50">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, sortedCustomers.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, sortedCustomers.length)} of {sortedCustomers.length}
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">‹</button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                                .map((p, idx, arr) => (
+                                    <React.Fragment key={p}>
+                                        {idx > 0 && arr[idx - 1] !== p - 1 && <span className="text-gray-300 text-[10px]">…</span>}
+                                        <button onClick={() => setCurrentPage(p)}
+                                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${p === currentPage ? 'bg-[#1A2232] text-yellow-400' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                                            {p}
+                                        </button>
+                                    </React.Fragment>
+                                ))}
+                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">›</button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Add Customer Modal */}

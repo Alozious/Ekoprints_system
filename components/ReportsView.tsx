@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line, Sector } from 'recharts';
 import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord, SystemSettings } from '../types';
 import { CalendarIcon, PrintIcon, BanknotesIcon as BankIcon } from './icons';
 
@@ -341,6 +341,60 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
 
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
 
+    const [activePieIndex, setActivePieIndex] = useState(-1);
+    const [trendChartType, setTrendChartType] = useState<'area' | 'bar' | 'line'>('area');
+
+    const salesTrendData = useMemo(() => {
+        type Entry = { date: string; sortKey: number; revenue: number; expenses: number };
+        const map: Record<string, Entry> = {};
+        const useMonthly = period === 'year' || period === 'all';
+
+        const getKey = (d: Date): [string, number] => {
+            if (useMonthly) {
+                return [
+                    d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+                    d.getFullYear() * 100 + d.getMonth()
+                ];
+            }
+            return [
+                d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate()
+            ];
+        };
+
+        filteredData.sales.forEach(sale => {
+            const [label, sortKey] = getKey(new Date(sale.date));
+            if (!map[label]) map[label] = { date: label, sortKey, revenue: 0, expenses: 0 };
+            map[label].revenue += sale.total;
+        });
+
+        filteredData.expenses.forEach(exp => {
+            const [label, sortKey] = getKey(new Date(exp.date));
+            if (!map[label]) map[label] = { date: label, sortKey, revenue: 0, expenses: 0 };
+            map[label].expenses += exp.amount;
+        });
+
+        return Object.values(map)
+            .sort((a, b) => a.sortKey - b.sortKey)
+            .map(({ date, revenue, expenses }) => ({ date, revenue, expenses }));
+    }, [filteredData, period]);
+
+    const renderActiveShape = (props: any) => {
+        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value } = props;
+        return (
+            <g>
+                <text x={cx} y={cy - 8} textAnchor="middle" fill="#1a2232" fontSize={11} fontWeight={900} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {payload.name}
+                </text>
+                <text x={cx} y={cy + 10} textAnchor="middle" fill="#3b82f6" fontSize={12} fontWeight={900}>
+                    {formatUGX(value)}
+                </text>
+                <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={outerRadius + 10} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+                <Sector cx={cx} cy={cy} innerRadius={outerRadius + 14} outerRadius={outerRadius + 17} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+            </g>
+        );
+    };
+
     const getPeriodLabel = () => {
         if (period === 'today') return 'Today';
         if (period === 'yesterday') return 'Yesterday';
@@ -594,136 +648,114 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     };
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto">
+        <div className="space-y-6 max-w-7xl mx-auto">
 
-            {/* 1. Header and Filters Section */}
-            <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
-                        Business Reports: <span className="text-yellow-600">{getPeriodLabel()}</span>
-                    </h2>
+            {/* 1. Merged header bar */}
+            <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">
+                    Business Reports: <span className="text-yellow-500">{getPeriodLabel()}</span>
+                </span>
+                <div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
 
-                    <div className="flex flex-wrap items-center gap-3">
-                        {period === 'custom' && !isBankerOnly && (
-                            <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-1 pr-3 fade-in group">
-                                <div className="p-2 text-gray-400 group-hover:text-blue-500 transition-colors">
-                                    <CalendarIcon className="w-5 h-5" />
-                                </div>
-                                <select
-                                    value={dateMode}
-                                    onChange={(e) => setDateMode(e.target.value as 'specific' | 'range')}
-                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-gray-600 outline-none mr-2"
-                                >
-                                    <option value="specific">Specific Date</option>
-                                    <option value="range">Date Range</option>
-                                </select>
-
-                                <input
-                                    type="date"
-                                    value={customDateStart}
-                                    onChange={(e) => {
-                                        setCustomDateStart(e.target.value);
-                                        if (dateMode === 'specific') setCustomDateEnd(e.target.value);
-                                    }}
-                                    className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-blue-600 outline-none"
-                                />
-
-                                {dateMode === 'range' && (
-                                    <>
-                                        <span className="text-gray-400 text-[10px] font-black">-</span>
-                                        <input
-                                            type="date"
-                                            value={customDateEnd}
-                                            onChange={(e) => setCustomDateEnd(e.target.value)}
-                                            className="bg-transparent border-none focus:ring-0 text-[10px] font-black uppercase tracking-widest text-blue-600 outline-none"
-                                        />
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="flex bg-gray-200/50 p-1 rounded-[1.2rem] shadow-inner border border-gray-200">
-                            {periodsToDisplay.map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => setPeriod(p)}
-                                    className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center ${period === p ? 'bg-white text-blue-600 shadow-md scale-[1.02]' : 'text-gray-500 hover:text-gray-800'}`}
-                                >
-                                    {p === 'custom' && <CalendarIcon className="w-3 h-3 mr-1.5" />}
-                                    {p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Specific Date'}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="ml-auto">
-                            <button onClick={handleGenerateStatement} className="flex items-center bg-gray-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"><PrintIcon className="w-4 h-4 mr-2" /> Generate Statement</button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Module Filter Pills */}
-                <div className="flex flex-wrap gap-2">
-                    {(['all', 'largeformat', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products'] as ModuleFilter[]).map(mod => (
-                        <button
-                            key={mod}
-                            onClick={() => setActiveModule(mod)}
-                            className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border-2 ${activeModule === mod ? 'bg-[#1a2232] text-yellow-400 border-[#1a2232] shadow-lg scale-105' : 'bg-white text-gray-400 border-gray-50 hover:border-yellow-400 hover:text-gray-700'}`}
-                        >
-                            {mod === 'all' ? 'Unified View' : mod.replace(/([A-Z])/g, ' $1').trim()}
+                {/* Period pills */}
+                <div className="flex bg-gray-100 p-0.5 rounded-xl overflow-x-auto scrollbar-hide gap-0.5">
+                    {periodsToDisplay.map(p => (
+                        <button key={p} onClick={() => setPeriod(p)}
+                            className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center whitespace-nowrap flex-shrink-0 ${period === p ? 'bg-white text-blue-600 shadow' : 'text-gray-400 hover:text-gray-700'}`}>
+                            {p === 'custom' && <CalendarIcon className="w-3 h-3 mr-1" />}
+                            {p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Custom'}
                         </button>
                     ))}
+                </div>
+
+                {/* Custom date inputs */}
+                {period === 'custom' && !isBankerOnly && (
+                    <div className="flex items-center gap-1.5 fade-in">
+                        <select value={dateMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDateMode(e.target.value as 'specific' | 'range')}
+                            className="h-[30px] rounded-lg border-none bg-[#374151] px-2 text-[9px] font-black text-white outline-none focus:ring-2 focus:ring-yellow-400">
+                            <option value="specific">Specific</option>
+                            <option value="range">Range</option>
+                        </select>
+                        <input type="date" value={customDateStart} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomDateStart(e.target.value); if (dateMode === 'specific') setCustomDateEnd(e.target.value); }}
+                            className="h-[30px] rounded-lg border-none bg-[#374151] px-2 text-[9px] font-bold text-blue-300 outline-none focus:ring-2 focus:ring-yellow-400" />
+                        {dateMode === 'range' && (
+                            <>
+                                <span className="text-gray-300 text-[9px] font-black">—</span>
+                                <input type="date" value={customDateEnd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDateEnd(e.target.value)}
+                                    className="h-[30px] rounded-lg border-none bg-[#374151] px-2 text-[9px] font-bold text-blue-300 outline-none focus:ring-2 focus:ring-yellow-400" />
+                            </>
+                        )}
+                    </div>
+                )}
+
+                <div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
+
+                {/* Module pills */}
+                <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                    {(['all', 'largeformat', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products'] as ModuleFilter[]).map(mod => (
+                        <button key={mod} onClick={() => setActiveModule(mod)}
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeModule === mod ? 'bg-[#1a2232] text-yellow-400 shadow' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-700'}`}>
+                            {mod === 'all' ? 'All' : mod === 'largeformat' ? 'LF' : mod.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="ml-auto">
+                    <button onClick={handleGenerateStatement} className="flex items-center bg-[#1A2232] text-yellow-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap border border-yellow-400/20">
+                        <PrintIcon className="w-3.5 h-3.5 mr-1" /> Statement
+                    </button>
                 </div>
             </div>
 
             {/* 2. High-Contrast Cash Flow Banner */}
             {bankingSummary && (
-                <div className="bg-[#1a2232] rounded-[2.5rem] shadow-2xl p-8 text-white relative overflow-hidden group">
+                <div className="bg-[#1a2232] rounded-[2rem] shadow-2xl px-6 py-5 text-white relative overflow-hidden group">
                     <div className="absolute -top-24 -right-24 w-64 h-64 bg-yellow-400/10 rounded-full blur-3xl group-hover:bg-yellow-400/20 transition-all duration-700"></div>
                     <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl group-hover:bg-blue-400/20 transition-all duration-700"></div>
 
                     <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-xl font-black uppercase tracking-tight flex items-center">
-                                <div className="w-1.5 h-6 bg-yellow-400 mr-3 rounded-full shadow-[0_0_15px_rgba(251,191,36,0.5)]"></div>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-sm font-black uppercase tracking-tight flex items-center">
+                                <div className="w-1 h-4 bg-yellow-400 mr-2.5 rounded-full shadow-[0_0_15px_rgba(251,191,36,0.5)]"></div>
                                 {getBankingTitle()}
                             </h2>
-                            <span className="text-[10px] bg-yellow-400 text-gray-900 px-4 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg">
+                            <span className="text-[9px] bg-yellow-400 text-gray-900 px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg">
                                 {getPeriodLabel()}
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all">
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash From Yesterday</p>
-                                <p className="text-2xl font-black text-blue-400 tracking-tight">{formatUGX(safeBalance.safeYesterday)}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all">
+                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Cash From Yesterday</p>
+                                <p className="text-lg font-black text-blue-400 tracking-tight">{formatUGX(safeBalance.safeYesterday)}</p>
                             </div>
-                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all">
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash Collected (Today)</p>
-                                <p className="text-2xl font-black text-emerald-400 tracking-tight">{formatUGX(safeBalance.cashToday)}</p>
+                            <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all">
+                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Cash Collected (Today)</p>
+                                <p className="text-lg font-black text-emerald-400 tracking-tight">{formatUGX(safeBalance.cashToday)}</p>
                             </div>
-                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl backdrop-blur-sm hover:bg-white/10 transition-all relative">
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Daily Expenses</p>
-                                <p className="text-2xl font-black text-rose-400 tracking-tight">{formatUGX(safeBalance.expensesToday)}</p>
+                            <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all relative">
+                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Daily Expenses</p>
+                                <p className="text-lg font-black text-rose-400 tracking-tight">{formatUGX(safeBalance.expensesToday)}</p>
                             </div>
-                            <div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform relative group/safe overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover/safe:opacity-100 transition-opacity">
+                            <div className="bg-white px-4 py-3 rounded-2xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform relative group/safe overflow-hidden">
+                                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover/safe:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => setShowBankingModal(true)}
-                                        className="bg-gray-900 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center"
+                                        className="bg-gray-900 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center"
                                     >
-                                        <BankIcon className="w-3 h-3 mr-1.5" /> Bank Money
+                                        <BankIcon className="w-3 h-3 mr-1" /> Bank
                                     </button>
                                 </div>
-                                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Money In Safe</p>
-                                <p className="text-3xl font-black text-[#1a2232] tracking-tighter">{formatUGX(safeBalance.currentSafe)}</p>
+                                <p className="text-gray-500 text-[9px] font-black uppercase tracking-widest mb-1">Money In Safe</p>
+                                <p className="text-xl font-black text-[#1a2232] tracking-tighter">{formatUGX(safeBalance.currentSafe)}</p>
                                 {safeBalance.bankedToday > 0 && (
-                                    <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase italic">
-                                        (Banked today: {formatUGX(safeBalance.bankedToday)})
+                                    <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase italic">
+                                        Banked: {formatUGX(safeBalance.bankedToday)}
                                     </p>
                                 )}
                             </div>
                         </div>
-                        <p className="text-gray-500 text-[9px] mt-6 text-center italic font-bold uppercase tracking-widest opacity-60">
+                        <p className="text-gray-500 text-[9px] mt-3 text-center italic font-bold uppercase tracking-widest opacity-60">
                             * This summary represents total cash flow for the entire business for the selected period ({getPeriodLabel()}).
                         </p>
                     </div>
@@ -731,76 +763,163 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
             )}
 
             {/* 3. Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-gray-900 transition-colors">Total Invoiced (Sales)</h3>
-                    <p className="text-2xl font-black text-gray-900 tracking-tight">{formatUGX(totalInvoiced)}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
+                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-gray-900 transition-colors">Total Invoiced (Sales)</h3>
+                    <p className="text-lg font-black text-gray-900 tracking-tight">{formatUGX(totalInvoiced)}</p>
                 </div>
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-emerald-500 transition-colors">Cash Collected</h3>
-                    <p className="text-2xl font-black text-emerald-600 tracking-tight">{formatUGX(totalCashCollected)}</p>
+                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
+                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-500 transition-colors">Cash Collected</h3>
+                    <p className="text-lg font-black text-emerald-600 tracking-tight">{formatUGX(totalCashCollected)}</p>
                 </div>
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-rose-500 transition-colors">Total Expenses</h3>
-                    <p className="text-2xl font-black text-rose-600 tracking-tight">{formatUGX(totalExpenses)}</p>
+                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
+                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-rose-500 transition-colors">Total Expenses</h3>
+                    <p className="text-lg font-black text-rose-600 tracking-tight">{formatUGX(totalExpenses)}</p>
                 </div>
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-blue-500 transition-colors">Net Cash Flow</h3>
-                    <p className="text-2xl font-black text-blue-600 tracking-tight">{formatUGX(netCashFlow)}</p>
+                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
+                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-blue-500 transition-colors">Net Cash Flow</h3>
+                    <p className="text-lg font-black text-blue-600 tracking-tight">{formatUGX(netCashFlow)}</p>
                 </div>
             </div>
 
-            {/* 4. Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                <div className="lg:col-span-3 bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Expenses by Category</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={expenseByCategory}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={100}
-                                paddingAngle={5}
-                                fill="#8884d8"
-                                label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                                className="outline-none"
+            {/* 4. Sales & Expense Trend Chart */}
+            <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                    <div>
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Revenue & Expense Trend</h3>
+                        <p className="text-xs text-gray-400 font-medium mt-0.5">{getPeriodLabel()}</p>
+                    </div>
+                    <div className="flex bg-gray-100 rounded-xl p-1 gap-1 self-start sm:self-auto">
+                        {(['area', 'bar', 'line'] as const).map(type => (
+                            <button
+                                key={type}
+                                onClick={() => setTrendChartType(type)}
+                                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${trendChartType === type ? 'bg-white shadow text-blue-600' : 'text-gray-400 hover:text-gray-700'}`}
                             >
-                                {expenseByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip
-                                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', fontWeight: 900 }}
-                                formatter={(value: number) => formatUGX(value)}
-                            />
-                            <Legend />
-                        </PieChart>
+                                {type}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                {salesTrendData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={260}>
+                        {trendChartType === 'area' ? (
+                            <AreaChart data={salesTrendData}>
+                                <defs>
+                                    <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="gradExpenses" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
+                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
+                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
+                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
+                                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={3} fill="url(#gradRevenue)" dot={false} activeDot={{ r: 6 }} />
+                                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#ef4444" strokeWidth={2} fill="url(#gradExpenses)" dot={false} activeDot={{ r: 5 }} />
+                            </AreaChart>
+                        ) : trendChartType === 'bar' ? (
+                            <BarChart data={salesTrendData} barGap={2}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
+                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
+                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
+                                <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={32} />
+                                <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[6, 6, 0, 0]} maxBarSize={32} />
+                            </BarChart>
+                        ) : (
+                            <LineChart data={salesTrendData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
+                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
+                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
+                                <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={3} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 7 }} />
+                                <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} strokeDasharray="5 3" />
+                            </LineChart>
+                        )}
                     </ResponsiveContainer>
+                ) : (
+                    <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No data for selected period.</div>
+                )}
+            </div>
+
+            {/* 5. Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="lg:col-span-3 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Expenses by Category</h3>
+                    <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-6">Hover a slice for details</p>
+                    {expenseByCategory.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                                <Pie
+                                    data={expenseByCategory}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={65}
+                                    outerRadius={105}
+                                    paddingAngle={4}
+                                    activeIndex={activePieIndex}
+                                    activeShape={renderActiveShape}
+                                    onMouseEnter={(_, index) => setActivePieIndex(index)}
+                                    onMouseLeave={() => setActivePieIndex(-1)}
+                                    className="outline-none"
+                                >
+                                    {expenseByCategory.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 900, fontSize: 11 }}
+                                    formatter={(value: number) => formatUGX(value)}
+                                />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900 }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No expense data for current filters.</div>
+                    )}
                 </div>
 
-                <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Top 5 Selling Items (by Revenue)</h3>
-                    <div className="space-y-6">
-                        {topSellingItems.map((item, idx) => (
-                            <div key={item.name} className="flex items-center justify-between group">
-                                <div className="flex items-center">
-                                    <span className="w-6 h-6 rounded-lg bg-gray-900 text-white flex items-center justify-center text-[10px] font-black mr-4 shadow-md">{idx + 1}</span>
-                                    <div>
-                                        <p className="text-xs font-black text-gray-800 uppercase tracking-tight group-hover:text-blue-600 transition-colors">{item.name}</p>
-                                        <p className="text-[9px] text-gray-400 font-bold uppercase">Qty: {item.quantity}</p>
-                                    </div>
-                                </div>
-                                <span className="font-black text-emerald-600 text-sm">{formatUGX(item.revenue)}</span>
-                            </div>
-                        ))}
-                        {topSellingItems.length === 0 && (
-                            <div className="py-20 text-center">
-                                <p className="text-xs text-gray-300 font-black uppercase tracking-[0.3em]">No data for current filters.</p>
-                            </div>
-                        )}
-                    </div>
+                <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Top 5 Selling Items</h3>
+                    <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-6">By Revenue</p>
+                    {topSellingItems.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={280}>
+                            <BarChart layout="vertical" data={topSellingItems} margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    type="category"
+                                    dataKey="name"
+                                    width={110}
+                                    tick={{ fontSize: 9, fontWeight: 900, textAnchor: 'end', fill: '#6b7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + '…' : v}
+                                />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 900, fontSize: 11 }}
+                                    formatter={(v: number, name: string) => [formatUGX(v), name === 'revenue' ? 'Revenue' : name]}
+                                    cursor={{ fill: '#f8fafc' }}
+                                />
+                                <Bar dataKey="revenue" name="Revenue" radius={[0, 8, 8, 0]} maxBarSize={28}>
+                                    {topSellingItems.map((_, index) => (
+                                        <Cell key={`bar-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No data for current filters.</div>
+                    )}
                 </div>
             </div>
 

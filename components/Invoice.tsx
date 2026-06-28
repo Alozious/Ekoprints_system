@@ -10,6 +10,7 @@ interface InvoiceProps {
   onClose: () => void;
   sale: Sale & { customer: Customer };
   settings: SystemSettings;
+  isQuotation?: boolean;
 }
 
 const formatUGX = (amount: number) => {
@@ -44,7 +45,7 @@ const invoiceStyles = `
   .invoice-meta { text-align: right; }
   .invoice-id { font-size: 14px; font-weight: 800; color: #000; text-transform: uppercase; }
   .invoice-date { font-size: 11px; color: #718096; margin-top: 1px; }
-
+ 
   .info-grid { 
     display: grid; 
     grid-template-cols: 1fr 1fr; 
@@ -54,7 +55,7 @@ const invoiceStyles = `
   .info-label { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #a0aec0; margin-bottom: 3px; letter-spacing: 0.5px; }
   .info-value { font-size: 12px; color: #2d3748; line-height: 1.4; }
   .info-value strong { color: #000; font-weight: 700; }
-
+ 
   .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
   .invoice-table th { 
     background: #f8fafc; 
@@ -101,7 +102,8 @@ const invoiceStyles = `
   .status-unpaid { background: #fff5f5; color: #c53030; }
   .status-paid { background: #f0fff4; color: #2f855a; }
   .status-partial { background: #fffaf0; color: #c05621; }
-
+  .status-quote { background: #fef08a; color: #854d0e; }
+ 
   .invoice-footer { 
     margin-top: 30px; 
     padding-top: 15px; 
@@ -110,7 +112,7 @@ const invoiceStyles = `
   }
   .thanks-msg { font-size: 13px; font-weight: 800; color: #000; margin-bottom: 2px; white-space: pre-wrap; }
   .terms { font-size: 10px; color: #a0aec0; white-space: pre-wrap; }
-
+ 
   @media print {
     @page { margin: 10mm; }
     body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -118,16 +120,13 @@ const invoiceStyles = `
       border: none !important; 
       padding: 0 !important; 
       width: 100% !important;
-      max-width: 600px !important; /* Tighten max-width further */
+      max-width: 600px !important;
       margin: 0 auto !important;
       color: #000 !important;
       box-shadow: none !important;
     }
     .invoice-header { margin-bottom: 12px !important; padding-bottom: 8px !important; }
-    
-    /* Target the logo to make it specifically smaller in print */
     .invoice-header img { height: 1.5rem !important; max-width: 100px !important; }
-    
     .invoice-table td, .info-value, .total-row, .total-row.grand-total { font-size: 10px !important; }
     .total-row.grand-total { font-size: 13px !important; }
     .brand-details { font-size: 8px !important; }
@@ -138,7 +137,7 @@ const invoiceStyles = `
   }
 `;
 
-const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) => {
+const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings, isQuotation = false }) => {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const subtotal = sale.subtotal || sale.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const discount = sale.discount || 0;
@@ -153,7 +152,7 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
 
     const printWindow = window.open('', '_blank', 'height=800,width=800');
     if (printWindow) {
-      printWindow.document.write(`<html><head><title>${settings.businessName} Invoice</title>`);
+      printWindow.document.write(`<html><head><title>${settings.businessName} ${isQuotation ? 'Quotation' : 'Invoice'}</title>`);
       printWindow.document.write(`
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
@@ -181,15 +180,16 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
   };
 
   const getStatusClass = () => {
+    if (isQuotation) return 'status-quote';
     if (sale.status === 'Paid') return 'status-paid';
     if (sale.status === 'Partially Paid') return 'status-partial';
     return 'status-unpaid';
   };
 
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=EKO-INV-${sale.id.substring(0, 8)}&color=0-0-0&bgcolor=255-255-255&margin=1`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=EKO-${isQuotation ? 'QT' : 'INV'}-${sale.id.substring(0, 8)}&color=0-0-0&bgcolor=255-255-255&margin=1`;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Invoice Detail`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={isQuotation ? `Quotation Detail` : `Invoice Detail`}>
       <style>{invoiceStyles}</style>
       <div className="bg-gray-100 p-2 sm:p-4 rounded-xl overflow-x-hidden">
         <div className="invoice-container shadow-md mx-auto bg-white" ref={invoiceRef}>
@@ -203,29 +203,31 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
               </div>
             </div>
             <div className="invoice-meta">
-              <div className="invoice-id">INV-#{sale.id.substring(0, 8).toUpperCase()}</div>
+              <div className="invoice-id">{isQuotation ? 'QT' : 'INV'}-#{sale.id.substring(0, 8).toUpperCase()}</div>
               <div className="invoice-date">Date: {new Date(sale.date).toLocaleDateString()}</div>
               <div className={`status-badge ${getStatusClass()}`}>
-                {sale.status}
+                {isQuotation ? 'Quotation' : sale.status}
               </div>
             </div>
           </div>
 
           <div className="info-grid">
             <div>
-              <div className="info-label">Billed To</div>
+              <div className="info-label">{isQuotation ? 'Prepared For' : 'Billed To'}</div>
               <div className="info-value">
                 <strong>{sale.customer.name}</strong><br />
                 {sale.customer.phone && <span className="text-gray-500">{sale.customer.phone}</span>}
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="info-label">Payment Mode</div>
-              <div className="info-value">
-                Cash / MM<br />
-                <span className="font-bold">UGX</span>
+            {!isQuotation && (
+              <div style={{ textAlign: 'right' }}>
+                <div className="info-label">Payment Mode</div>
+                <div className="info-value">
+                  Cash / MM<br />
+                  <span className="font-bold">UGX</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <table className="invoice-table">
@@ -249,9 +251,20 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
             </tbody>
           </table>
 
+          {sale.rules && sale.rules.length > 0 && (
+            <div style={{ marginBottom: '20px', borderTop: '1px dashed #edf2f7', paddingTop: '12px' }}>
+              <div className="info-label" style={{ marginBottom: '6px' }}>Invoice Terms & Rules</div>
+              <ul style={{ margin: 0, paddingLeft: '15px', fontSize: '11px', color: '#4a5568', listStyleType: 'disc' }} className="space-y-0.5">
+                {sale.rules.map((rule, idx) => (
+                  <li key={idx} className="font-medium">{rule}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="summary-section">
             <div className="qr-code-section">
-              <img src={qrCodeUrl} alt="Invoice QR Code" width="50" height="50" className="mx-auto block" />
+              <img src={qrCodeUrl} alt="QR Code" width="50" height="50" className="mx-auto block" />
               <div className="qr-code-label">Eko Verify</div>
             </div>
             <div className="totals-table">
@@ -265,18 +278,22 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
                   <span>-{formatUGX(discount)}</span>
                 </div>
               )}
-              <div className="total-row" style={{ color: '#2f855a' }}>
-                <span>Paid</span>
-                <span>{formatUGX(paid)}</span>
-              </div>
-              {balance > 0 && (
-                <div className="total-row" style={{ color: '#c53030', fontWeight: 'bold' }}>
-                  <span>Balance</span>
-                  <span>{formatUGX(balance)}</span>
-                </div>
+              {!isQuotation && (
+                <>
+                  <div className="total-row" style={{ color: '#2f855a' }}>
+                    <span>Paid</span>
+                    <span>{formatUGX(paid)}</span>
+                  </div>
+                  {balance > 0 && (
+                    <div className="total-row" style={{ color: '#c53030', fontWeight: 'bold' }}>
+                      <span>Balance</span>
+                      <span>{formatUGX(balance)}</span>
+                    </div>
+                  )}
+                </>
               )}
               <div className="total-row grand-total">
-                <span>Grand Total</span>
+                <span>{isQuotation ? 'Estimated Total' : 'Grand Total'}</span>
                 <span>{formatUGX(grandTotal)}</span>
               </div>
             </div>
@@ -297,7 +314,7 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
               const html = `
                         <html>
                         <head>
-                            <title>Thermal Receipt</title>
+                            <title>${isQuotation ? 'Quotation' : 'Thermal Receipt'}</title>
                             <style>
                                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
                                 @page { margin: 0; }
@@ -345,7 +362,7 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
                             <div class="dashed-line"></div>
                             
                             <div class="metadata">
-                                <div>INV: #${sale.id.substring(0, 8).toUpperCase()}</div>
+                                <div>${isQuotation ? 'QT' : 'INV'}: #${sale.id.substring(0, 8).toUpperCase()}</div>
                                 <div>Date: ${new Date(sale.date).toLocaleDateString()}</div>
                                 <div>Customer: ${sale.customer.name}</div>
                             </div>
@@ -372,13 +389,23 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings }) =>
                             <div class="text-right">
                                 <div class="total-row-item">Subtotal: ${subtotal.toLocaleString()}</div>
                                 ${discount > 0 ? `<div class="total-row-item">Discount: -${discount.toLocaleString()}</div>` : ''}
-                                <div class="total-row-item">Paid: ${paid.toLocaleString()}</div>
-                                <div class="total-row-item">Balance: ${balance.toLocaleString()}</div>
+                                ${!isQuotation ? `
+                                  <div class="total-row-item">Paid: ${paid.toLocaleString()}</div>
+                                  <div class="total-row-item">Balance: ${balance.toLocaleString()}</div>
+                                ` : ''}
                                 <div class="total-row-item" style="margin-top: 1mm;">
                                     TOTAL: ${grandTotal.toLocaleString()} UGX
                                 </div>
                             </div>
                             
+                            ${sale.rules && sale.rules.length > 0 ? `
+                                <div class="dashed-line"></div>
+                                <div style="font-size: 11px; margin-top: 1mm; margin-bottom: 1mm;">
+                                    <div class="bold" style="font-size: 12px; margin-bottom: 0.5mm;">RULES & TERMS:</div>
+                                    ${sale.rules.map(rule => `• ${rule}`).join('<br/>')}
+                                </div>
+                            ` : ''}
+
                             <div class="dashed-line"></div>
                             
                             <div class="qr-section">

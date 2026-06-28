@@ -13,7 +13,7 @@ import UserManagementView from './components/UserManagementView';
 import CalculatorView from './components/CalculatorView';
 import SettingsView from './components/SettingsView';
 import ToastContainer from './components/Toast';
-import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord, SystemSettings } from './types';
+import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord, SystemSettings, Quotation } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Firebase
@@ -59,9 +59,12 @@ const App: React.FC = () => {
         statementFooter: 'Thank you for your business!'
     };
     const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
     const [quoteForSale, setQuoteForSale] = useState<SaleItem[]>([]);
     const [quoteNarration, setQuoteNarration] = useState('');
     const [quoteDiscount, setQuoteDiscount] = useState(0);
+    const [quoteRules, setQuoteRules] = useState<string[]>([]);
+    const [isQuotationMode, setIsQuotationMode] = useState(false);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
     const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -94,6 +97,7 @@ const App: React.FC = () => {
                 fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[])),
                 fetchData('bankingRecords').then(data => setBankingRecords((data as BankingRecord[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('quotations').then(data => setQuotations((data as Quotation[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('settings').then(data => {
                     if (data && data.length > 0) {
                         setSettings(data[0] as SystemSettings);
@@ -209,6 +213,14 @@ const App: React.FC = () => {
         }
     }, [inventory, createDocument, updateDocument]);
 
+    const handleAddQuotation = useCallback(async (quoteData: Omit<Quotation, 'id'>) => {
+        await createDocument('quotations', quoteData, setQuotations, 'Quotation created successfully.');
+    }, [createDocument]);
+
+    const handleDeleteQuotation = useCallback(async (id: string) => {
+        await deleteDocument('quotations', id, setQuotations, 'Quotation deleted.');
+    }, [deleteDocument]);
+
     const handleUpdateSale = useCallback(async (sale: Sale) => {
         const { id, ...data } = sale;
         await updateDocument('sales', id, data, setSales, 'Sale updated successfully.');
@@ -285,17 +297,26 @@ const App: React.FC = () => {
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView
-                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); }}
+                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} quoteRules={quoteRules} isQuotationMode={isQuotationMode} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); setQuoteRules([]); setIsQuotationMode(false); }}
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
-                                settings={settings}
+                                settings={settings} quotations={quotations} onAddQuotation={handleAddQuotation} onDeleteQuotation={handleDeleteQuotation}
                             />
                         )}
                         {activeView === 'Calculator' && (
                             <CalculatorView
                                 stockItems={stockItems} pricingTiers={pricingTiers} inventory={inventory} materialCategories={materialCategories} productCategories={productCategories}
-                                onCreateSale={(items, narration, discount) => { setQuoteForSale(items); setQuoteNarration(narration); setQuoteDiscount(discount); setActiveView('Sales'); }}
+                                onCreateSale={(items, narration, discount, rules, isQuotation) => { 
+                                    setQuoteForSale(items); 
+                                    setQuoteNarration(narration); 
+                                    setQuoteDiscount(discount); 
+                                    setQuoteRules(rules || []);
+                                    setIsQuotationMode(!!isQuotation);
+                                    setActiveView('Sales'); 
+                                }}
+                                onCreateQuotation={handleAddQuotation}
+                                settings={settings}
                             />
                         )}
                         {activeView === 'Inventory' && (

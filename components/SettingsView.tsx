@@ -16,6 +16,7 @@ interface SettingsViewProps {
 
 const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings, expenseCategories, onAddExpenseCategory, onUpdateExpenseCategory, onDeleteExpenseCategory }) => {
     const [formData, setFormData] = useState<SystemSettings>(settings);
+    const [newRule, setNewRule] = useState('');
 
     // Expense Categories state
     const [isCatAddOpen, setIsCatAddOpen] = useState(false);
@@ -121,6 +122,62 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                         <div>
                             <label className={labelClass}>Statement Footer Message</label>
                             <textarea name="statementFooter" value={formData.statementFooter} onChange={handleChange} className={`${inputClass} min-h-[100px] py-3`} required />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
+                    <div>
+                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b pb-2">Predefined Invoice & Quotation Rules</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newRule}
+                                onChange={e => setNewRule(e.target.value)}
+                                className={`${inputClass} mt-0`}
+                                placeholder="Enter rule or term (e.g. Valid for 14 days, Deposit non-refundable)"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (newRule.trim()) {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            predefinedRules: [...(prev.predefinedRules || []), newRule.trim()]
+                                        }));
+                                        setNewRule('');
+                                    }
+                                }}
+                                className="bg-yellow-400 text-[#1A2232] px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all shrink-0"
+                            >
+                                Add Rule
+                            </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                            {(formData.predefinedRules || []).map((rule, idx) => (
+                                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50/50 rounded-xl border border-gray-100 hover:border-yellow-400 transition-all">
+                                    <span className="text-[11px] font-bold text-gray-900">{rule}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                predefinedRules: (prev.predefinedRules || []).filter((_, i) => i !== idx)
+                                            }));
+                                        }}
+                                        className="text-gray-300 hover:text-red-500 p-1"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            {(formData.predefinedRules || []).length === 0 && (
+                                <p className="text-center text-[10px] text-gray-300 font-black uppercase tracking-widest py-4">No predefined rules added yet.</p>
+                            )}
                         </div>
                     </div>
                 </div>

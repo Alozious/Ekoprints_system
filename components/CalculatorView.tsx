@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { StockItem, PricingTier, SaleItem, InventoryItem, MaterialCategory, ProductCategory } from '../types';
-import { PlusIcon, TrashIcon, DocumentTextIcon, ChevronDownIcon, SearchIcon, BeakerIcon } from './icons';
+import { StockItem, PricingTier, SaleItem, InventoryItem, MaterialCategory, ProductCategory, SystemSettings } from '../types';
+import { PlusIcon, TrashIcon, DocumentTextIcon, ChevronDownIcon, SearchIcon, BeakerIcon, EditIcon } from './icons';
 import { useToast } from '../App';
 
 interface CalculatorViewProps {
@@ -10,7 +10,8 @@ interface CalculatorViewProps {
     inventory: InventoryItem[];
     materialCategories: MaterialCategory[];
     productCategories: ProductCategory[];
-    onCreateSale: (items: SaleItem[], narration: string, discount: number) => void;
+    onCreateSale: (items: SaleItem[], narration: string, discount: number, rules?: string[], isQuotation?: boolean) => void;
+    settings: SystemSettings;
 }
 
 type Unit = 'm' | 'ft' | 'in' | 'cm';
@@ -97,10 +98,12 @@ const UnitConverterDisplay: React.FC<{ lengthM: number; widthM: number }> = ({ l
     );
 };
 
-const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTiers, inventory, materialCategories, productCategories, onCreateSale }) => {
+const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTiers, inventory, materialCategories, productCategories, onCreateSale, settings }) => {
     const [activeTab, setActiveTab] = useState(CALCULATOR_TABS[0].id);
     const [quoteItems, setQuoteItems] = useState<SaleItem[]>([]);
     const [globalNarration, setGlobalNarration] = useState('');
+    const [selectedRules, setSelectedRules] = useState<string[]>([]);
+    const [customRuleInput, setCustomRuleInput] = useState('');
     const { addToast } = useToast();
 
     // Dimension Calc State
@@ -259,6 +262,20 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             name: itemName,
             quantity: dimQuantity,
             price: (negotiatedDimPrice) + (extraAmount / dimQuantity),
+            metadata: {
+                type: 'dimension',
+                tab: activeTab,
+                length,
+                lengthUnit,
+                width,
+                widthUnit,
+                selectedStockItem,
+                selectedTier,
+                negotiatedDimPrice,
+                extraAmount,
+                extraAmountLabel,
+                dtfPreset
+            }
         };
         setQuoteItems(prev => [...prev, newItem]);
         addToast("Added to scratchpad.", "success");
@@ -271,6 +288,15 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             name: `${selectedProduct.name} ${[selectedProduct.attr1, selectedProduct.attr2].filter(Boolean).join(' | ')}`,
             quantity: simpleQuantity,
             price: negotiatedPrice + (extraAmount / simpleQuantity),
+            metadata: {
+                type: 'simple',
+                tab: activeTab,
+                selectedProductCategory,
+                selectedProductId: selectedProduct.id,
+                negotiatedPrice,
+                extraAmount,
+                extraAmountLabel
+            }
         };
         setQuoteItems(prev => [...prev, newItem]);
         addToast("Added to scratchpad.", "success");
@@ -285,6 +311,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             name: manualItemName.trim(),
             quantity: manualQuantity,
             price: manualPrice,
+            metadata: {
+                type: 'manual',
+                tab: activeTab,
+                manualItemName: manualItemName.trim(),
+                manualPrice,
+                manualQuantity
+            }
         };
         setQuoteItems(prev => [...prev, newItem]);
         setManualItemName('');
@@ -293,15 +326,62 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         addToast("Added to scratchpad.", "success");
     };
 
+    const handleRecallQuoteItem = (index: number) => {
+        const item = quoteItems[index];
+        if (!item.metadata) {
+            addToast("This item has no metadata and cannot be recalled.", "error");
+            return;
+        }
+
+        const meta = item.metadata;
+        setActiveTab(meta.tab);
+
+        if (meta.type === 'dimension') {
+            setLength(meta.length || 0);
+            setLengthUnit((meta.lengthUnit as Unit) || 'cm');
+            setWidth(meta.width || 0);
+            setWidthUnit((meta.widthUnit as Unit) || 'cm');
+            setSelectedStockItem(meta.selectedStockItem || '');
+            setSelectedTier(meta.selectedTier || '');
+            setNegotiatedDimPrice(meta.negotiatedDimPrice || 0);
+            setDimQuantity(item.quantity);
+            setExtraAmount(meta.extraAmount || 0);
+            setExtraAmountLabel(meta.extraAmountLabel || '');
+            setDtfPreset(meta.dtfPreset || null);
+        } else if (meta.type === 'simple') {
+            setSelectedProductCategory(meta.selectedProductCategory || '');
+            const p = inventory.find(i => i.id === meta.selectedProductId);
+            setSelectedProduct(p || null);
+            setNegotiatedPrice(meta.negotiatedPrice || 0);
+            setSimpleQuantity(item.quantity);
+            setExtraAmount(meta.extraAmount || 0);
+            setExtraAmountLabel(meta.extraAmountLabel || '');
+        } else if (meta.type === 'manual') {
+            setManualItemName(meta.manualItemName || '');
+            setManualPrice(meta.manualPrice || 0);
+            setManualQuantity(item.quantity);
+        }
+
+        setQuoteItems(prev => prev.filter((_, i) => i !== index));
+        addToast("Recalled item back to calculator for editing.", "success");
+    };
+
     const handleClearQuote = () => {
         setQuoteItems([]);
         setGlobalNarration('');
         setFinalPayable(0);
+        setSelectedRules([]);
     };
 
     const handleCreateSaleClick = () => {
         if (quoteItems.length === 0) return;
-        onCreateSale(quoteItems, globalNarration, discountAmount);
+        onCreateSale(quoteItems, globalNarration, discountAmount, selectedRules, false);
+        handleClearQuote();
+    };
+
+    const handleCreateQuotationClick = () => {
+        if (quoteItems.length === 0) return;
+        onCreateSale(quoteItems, globalNarration, discountAmount, selectedRules, true);
         handleClearQuote();
     };
 
@@ -615,6 +695,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                     </div>
                     <div className="flex items-center gap-4">
                         <button onClick={handleClearQuote} className="text-[10px] font-black text-gray-300 hover:text-red-500 uppercase tracking-widest transition-all">Wipe</button>
+                        <button onClick={handleCreateQuotationClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-yellow-400 text-gray-900 px-6 py-3 rounded-2xl shadow-sm hover:bg-yellow-500 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Quotation</button>
                         <button onClick={handleCreateSaleClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-[#E2E8F0] text-[#94A3B8] px-8 py-3 rounded-2xl shadow-sm hover:bg-[#1A2232] hover:text-yellow-400 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Post Order</button>
                     </div>
                 </div>
@@ -634,15 +715,106 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                             <p className="font-black text-gray-900 text-xs uppercase tracking-tight truncate mb-1">{item.name}</p>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.quantity} x {formatUGX(item.price)}</p>
                                         </div>
-                                        <div className="flex items-center shrink-0">
-                                            <p className="font-black text-gray-900 text-sm mr-4 tracking-tighter">{formatUGX(item.price * item.quantity)}</p>
-                                            <button onClick={() => handleRemoveQuoteItem(index)} className="p-2.5 bg-white text-gray-300 hover:text-red-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><TrashIcon className="w-4 h-4" /></button>
+                                        <div className="flex items-center shrink-0 gap-2">
+                                            <p className="font-black text-gray-900 text-sm mr-2 tracking-tighter">{formatUGX(item.price * item.quantity)}</p>
+                                            <button onClick={() => handleRecallQuoteItem(index)} title="Recall & Edit" className="p-2.5 bg-white text-gray-400 hover:text-blue-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><EditIcon className="w-4 h-4" /></button>
+                                            <button onClick={() => handleRemoveQuoteItem(index)} title="Remove" className="p-2.5 bg-white text-gray-300 hover:text-red-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><TrashIcon className="w-4 h-4" /></button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                              
-                             <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-100 space-y-6 shrink-0">
+                              <div className="mt-6 pt-4 border-t-2 border-dashed border-gray-100 space-y-4 shrink-0">
+                                <div>
+                                    <label className={labelClass}>Invoice / Quotation Rules & Policies</label>
+                                    <div className="bg-gray-50 rounded-3xl p-4 border border-gray-100 space-y-3">
+                                        {/* Predefined rules selection */}
+                                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                                            {(settings.predefinedRules || []).map((rule, idx) => {
+                                                const isSelected = selectedRules.includes(rule);
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setSelectedRules(prev => prev.filter(r => r !== rule));
+                                                            } else {
+                                                                setSelectedRules(prev => [...prev, rule]);
+                                                            }
+                                                        }}
+                                                        className={`text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border transition-all ${isSelected ? 'bg-yellow-400 text-gray-900 border-yellow-400' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'}`}
+                                                    >
+                                                        {rule}
+                                                    </button>
+                                                );
+                                            })}
+                                            {(settings.predefinedRules || []).length === 0 && (
+                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest py-1">No predefined rules in Settings.</p>
+                                            )}
+                                        </div>
+
+                                        {/* Custom rule adder */}
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={customRuleInput}
+                                                onChange={e => setCustomRuleInput(e.target.value)}
+                                                className="block flex-1 rounded-xl border border-gray-100 bg-white text-gray-900 text-[10px] font-bold px-3 py-2 outline-none"
+                                                placeholder="Custom rule/term (e.g. Delivery: 3 days)..."
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (customRuleInput.trim()) {
+                                                            setSelectedRules(prev => [...prev, customRuleInput.trim()]);
+                                                            setCustomRuleInput('');
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (customRuleInput.trim()) {
+                                                        setSelectedRules(prev => [...prev, customRuleInput.trim()]);
+                                                        setCustomRuleInput('');
+                                                    }
+                                                }}
+                                                className="bg-gray-900 text-yellow-400 px-3 rounded-xl text-[9px] font-black uppercase hover:bg-gray-800"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+
+                                        {/* List of active rules (editable on the fly) */}
+                                        {selectedRules.length > 0 && (
+                                            <div className="space-y-1.5 pt-2 border-t border-gray-100 max-h-40 overflow-y-auto pr-1">
+                                                {selectedRules.map((rule, idx) => (
+                                                    <div key={idx} className="flex gap-2 items-center">
+                                                        <input
+                                                            type="text"
+                                                            value={rule}
+                                                            onChange={e => {
+                                                                const updated = [...selectedRules];
+                                                                updated[idx] = e.target.value;
+                                                                setSelectedRules(updated);
+                                                            }}
+                                                            className="block flex-1 rounded-lg border border-gray-100 bg-white text-gray-900 text-[10px] font-medium px-2 py-1 outline-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedRules(prev => prev.filter((_, i) => i !== idx))}
+                                                            className="text-gray-300 hover:text-red-500 text-[10px] font-bold"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label className={labelClass}>Internal Job Details (Team Only)</label>
                                     <textarea 

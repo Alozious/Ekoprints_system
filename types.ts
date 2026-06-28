@@ -45,6 +45,26 @@ export interface SaleItem {
   name: string;
   quantity: number;
   price: number;
+  metadata?: {
+    type: 'dimension' | 'simple' | 'manual';
+    tab: string;
+    length?: number;
+    lengthUnit?: string;
+    width?: number;
+    widthUnit?: string;
+    selectedStockItem?: string;
+    selectedTier?: string;
+    negotiatedDimPrice?: number;
+    extraAmount?: number;
+    extraAmountLabel?: string;
+    dtfPreset?: 'A4' | 'A3' | null;
+    selectedProductCategory?: string;
+    selectedProductId?: string;
+    negotiatedPrice?: number;
+    manualItemName?: string;
+    manualPrice?: number;
+    manualQuantity?: number;
+  };
 }
 
 export interface Customer {
@@ -81,6 +101,21 @@ export interface Sale {
   payments?: Payment[];
   usageLogged?: boolean;
   notes?: string;
+  rules?: string[];
+}
+
+export interface Quotation {
+  id: string;
+  date: string;
+  items: SaleItem[];
+  customerId: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  userId: string;
+  userName?: string;
+  notes?: string;
+  rules?: string[];
 }
 
 export interface Expense {
@@ -160,4 +195,5 @@ export interface SystemSettings {
   receiptFooter: string;
   statementHeader: string;
   statementFooter: string;
+  predefinedRules?: string[];
 }

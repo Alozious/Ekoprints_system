@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, SystemSettings } from '../types';
+import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, SystemSettings, Quotation } from '../types';
 import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
@@ -26,6 +26,9 @@ interface SalesViewProps {
     pricingTiers: PricingTier[];
     onStockOut: (skuId: string, metersUsed: number, jobId: string, notes: string) => Promise<void>;
     settings: SystemSettings;
+    quotations: Quotation[];
+    onAddQuotation: (quoteData: Omit<Quotation, 'id'>) => Promise<void>;
+    onDeleteQuotation: (id: string) => Promise<void>;
 }
 
 const formatUGX = (amount: number) => {
@@ -243,8 +246,8 @@ const SearchableMaterialSelect: React.FC<{
 };
 
 const SalesView: React.FC<SalesViewProps> = ({
-    sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, clearQuote,
-    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut, settings
+    sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, quoteRules, isQuotationMode, clearQuote,
+    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut, settings, quotations, onAddQuotation, onDeleteQuotation
 }) => {
     const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
     const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
@@ -282,6 +285,13 @@ const SalesView: React.FC<SalesViewProps> = ({
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 13;
 
+    const [activeViewTab, setActiveViewTab] = useState<'sales' | 'quotations'>('sales');
+    const [selectedQuotation, setSelectedQuotation] = useState<(Quotation & { customer: Customer }) | null>(null);
+    const [isQuoteInvoiceOpen, setIsQuoteInvoiceOpen] = useState(false);
+    const [isConfirmDeleteQuoteOpen, setIsConfirmDeleteQuoteOpen] = useState(false);
+    const [quoteToDelete, setQuoteToDelete] = useState<string | null>(null);
+    const [convertingQuote, setConvertingQuote] = useState<Quotation | null>(null);
+
     const { addToast } = useToast();
 
     useEffect(() => {
@@ -297,16 +307,17 @@ const SalesView: React.FC<SalesViewProps> = ({
         if (!customerId) return;
         const saleData: Omit<Sale, 'id'> = {
             date: new Date().toISOString(),
-            items: quoteForSale,
+            items: convertingQuote ? convertingQuote.items : quoteForSale,
             customerId,
-            subtotal: subtotalQuote,
-            discount: quoteDiscount,
-            total: totalQuote,
+            subtotal: convertingQuote ? convertingQuote.subtotal : subtotalQuote,
+            discount: convertingQuote ? convertingQuote.discount : quoteDiscount,
+            total: convertingQuote ? convertingQuote.total : totalQuote,
             amountPaid,
-            status: amountPaid >= totalQuote ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid',
+            status: amountPaid >= (convertingQuote ? convertingQuote.total : totalQuote) ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid',
             userId: currentUser.id,
             userName: currentUser.username,
-            notes: quoteNarration || '',
+            notes: (convertingQuote ? convertingQuote.notes : quoteNarration) || '',
+            rules: convertingQuote ? convertingQuote.rules : (quoteRules || []),
             payments: amountPaid > 0 ? [{
                 id: uuidv4(),
                 date: new Date().toISOString(),
@@ -316,10 +327,50 @@ const SalesView: React.FC<SalesViewProps> = ({
             }] : []
         };
         await onAddSale(saleData);
-        clearQuote();
+        if (convertingQuote) {
+            await onDeleteQuotation(convertingQuote.id);
+            setConvertingQuote(null);
+        } else {
+            clearQuote();
+        }
         setCustomerId('');
         setAmountPaid(0);
         setIsAddSaleOpen(false);
+    };
+
+    const handleCreateQuotation = async () => {
+        if (!customerId) return;
+        const quoteData: Omit<Quotation, 'id'> = {
+            date: new Date().toISOString(),
+            items: quoteForSale,
+            customerId,
+            subtotal: subtotalQuote,
+            discount: quoteDiscount,
+            total: totalQuote,
+            userId: currentUser.id,
+            userName: currentUser.username,
+            notes: quoteNarration || '',
+            rules: quoteRules || []
+        };
+        await onAddQuotation(quoteData);
+        clearQuote();
+        setCustomerId('');
+        setIsAddSaleOpen(false);
+    };
+
+    const handleConvertQuoteToSale = (quote: Quotation) => {
+        setConvertingQuote(quote);
+        setCustomerId(quote.customerId);
+        setAmountPaid(0);
+        setIsAddSaleOpen(true);
+    };
+
+    const handleViewQuotation = (quote: Quotation) => {
+        const customer = customers.find(c => c.id === quote.customerId);
+        if (customer) {
+            setSelectedQuotation({ ...quote, customer });
+            setIsQuoteInvoiceOpen(true);
+        }
     };
 
     const handleQuickAddCustomer = async (name: string, phone: string, address: string) => {
@@ -541,16 +592,55 @@ const SalesView: React.FC<SalesViewProps> = ({
         return list;
     }, [sales, currentUser, filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery, customers]);
 
-    // Reset to first page whenever filters change
+    const filteredQuotations = useMemo(() => {
+        let list = quotations;
+
+        if (currentUser.role !== 'admin') {
+            const today = new Date().toDateString();
+            list = list.filter(q => q.userId === currentUser.id && new Date(q.date).toDateString() === today);
+        }
+
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            list = list.filter(q => {
+                const customerName = customers.find(c => c.id === q.customerId)?.name.toLowerCase() || '';
+                const quoteId = q.id.toLowerCase();
+                return quoteId.includes(query) || customerName.includes(query);
+            });
+        }
+
+        if (filterDateStart) {
+            const start = new Date(filterDateStart);
+            start.setHours(0, 0, 0, 0);
+            list = list.filter(q => new Date(q.date) >= start);
+        }
+        if (filterDateEnd) {
+            const end = new Date(filterDateEnd);
+            end.setHours(23, 59, 59, 999);
+            list = list.filter(q => new Date(q.date) <= end);
+        }
+
+        return list;
+    }, [quotations, currentUser, filterDateStart, filterDateEnd, searchQuery, customers]);
+
+    // Reset to first page whenever filters change or active tab changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery]);
+    }, [filterStatus, filterUser, filterDateStart, filterDateEnd, searchQuery, activeViewTab]);
 
-    const totalPages = Math.ceil(filteredSales.length / ITEMS_PER_PAGE);
+    const totalPages = activeViewTab === 'sales'
+        ? Math.ceil(filteredSales.length / ITEMS_PER_PAGE)
+        : Math.ceil(filteredQuotations.length / ITEMS_PER_PAGE);
+
     const paginatedSales = useMemo(() => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
         return filteredSales.slice(start, start + ITEMS_PER_PAGE);
     }, [filteredSales, currentPage]);
+
+    const paginatedQuotations = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredQuotations.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredQuotations, currentPage]);
 
     return (
         <div className="space-y-4">
@@ -564,29 +654,50 @@ const SalesView: React.FC<SalesViewProps> = ({
                     </h2>
                     <div className="w-px h-5 bg-gray-200 shrink-0 hidden lg:block" />
 
+                    {/* View Switcher */}
+                    <div className="flex bg-gray-100 p-1 rounded-2xl shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setActiveViewTab('sales')}
+                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${activeViewTab === 'sales' ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Orders Log
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveViewTab('quotations')}
+                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${activeViewTab === 'quotations' ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Quotations Log
+                        </button>
+                    </div>
+                    <div className="w-px h-5 bg-gray-200 shrink-0 hidden lg:block" />
+
                     {/* Search */}
                     <div className="relative flex-[2] min-w-[130px]">
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Invoice # or Customer..."
+                            placeholder={activeViewTab === 'sales' ? "Invoice # or Customer..." : "Quotation # or Customer..."}
                             className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
                         />
                         <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     </div>
 
-                    {/* Status */}
-                    <select
-                        value={filterStatus}
-                        onChange={e => setFilterStatus(e.target.value)}
-                        className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
-                    >
-                        <option value="All">All Statuses</option>
-                        <option value="Paid">Fully Paid</option>
-                        <option value="Partially Paid">Partial</option>
-                        <option value="Unpaid">Arrears</option>
-                    </select>
+                    {/* Status (Sales only) */}
+                    {activeViewTab === 'sales' && (
+                        <select
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value)}
+                            className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                        >
+                            <option value="All">All Statuses</option>
+                            <option value="Paid">Fully Paid</option>
+                            <option value="Partially Paid">Partial</option>
+                            <option value="Unpaid">Arrears</option>
+                        </select>
+                    )}
 
                     {/* Sales Rep (admin only) */}
                     {currentUser.role === 'admin' && (
@@ -647,116 +758,188 @@ const SalesView: React.FC<SalesViewProps> = ({
             </div>
 
             <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-                <table className="w-full text-left table-fixed">
-                    <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-[0.12em]">
-                        <tr>
-                            <th className="px-4 py-3 w-[10%]">Ref</th>
-                            <th className="px-4 py-3 w-[22%]">Client</th>
-                            <th className="px-4 py-3 w-[14%]">Date</th>
-                            <th className="px-4 py-3 w-[14%] text-right">Value</th>
-                            <th className="px-4 py-3 w-[14%] text-right">Balance</th>
-                            <th className="px-4 py-3 w-[10%] text-center">Status</th>
-                            <th className="px-4 py-3 w-[16%]">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {paginatedSales.map(sale => {
-                            const balance = sale.total - (sale.amountPaid || 0);
-                            const customer = customers.find(c => c.id === sale.customerId);
-                            return (
-                                <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
-                                    <td className="px-4 py-2 font-mono font-bold text-blue-600 text-[10px] truncate">
-                                        #{sale.id.substring(0, 7).toUpperCase()}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                        <p className="font-bold text-gray-900 text-[11px] uppercase truncate">{customer?.name || 'Guest'}</p>
-                                        <p className="text-[9px] text-gray-400 font-medium truncate">
-                                            {customer?.phone || '—'}
-                                        </p>
-                                    </td>
-                                    <td className="px-4 py-2 text-gray-600 font-medium text-[10px]">
-                                        {new Date(sale.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
-                                        <span className="block text-[9px] text-gray-400">
-                                            {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-2 text-right font-bold text-gray-900 text-[10px]">
-                                        {formatUGX(sale.total)}
-                                    </td>
-                                    <td className="px-4 py-2 text-right">
-                                        {balance > 0 ? (
-                                            <span className="font-bold text-rose-600 text-[10px]">{formatUGX(balance)}</span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold text-[9px] uppercase">
-                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                Settled
+                {activeViewTab === 'sales' ? (
+                    <table className="w-full text-left table-fixed">
+                        <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-[0.12em]">
+                            <tr>
+                                <th className="px-4 py-3 w-[10%]">Ref</th>
+                                <th className="px-4 py-3 w-[22%]">Client</th>
+                                <th className="px-4 py-3 w-[14%]">Date</th>
+                                <th className="px-4 py-3 w-[14%] text-right">Value</th>
+                                <th className="px-4 py-3 w-[14%] text-right">Balance</th>
+                                <th className="px-4 py-3 w-[10%] text-center">Status</th>
+                                <th className="px-4 py-3 w-[16%]">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {paginatedSales.map(sale => {
+                                const balance = sale.total - (sale.amountPaid || 0);
+                                const customer = customers.find(c => c.id === sale.customerId);
+                                return (
+                                    <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
+                                        <td className="px-4 py-2 font-mono font-bold text-blue-600 text-[10px] truncate">
+                                            #{sale.id.substring(0, 7).toUpperCase()}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <p className="font-bold text-gray-900 text-[11px] uppercase truncate">{customer?.name || 'Guest'}</p>
+                                            <p className="text-[9px] text-gray-400 font-medium truncate">
+                                                {customer?.phone || '—'}
+                                            </p>
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-600 font-medium text-[10px]">
+                                            {new Date(sale.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
+                                            <span className="block text-[9px] text-gray-400">
+                                                {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-2 text-center">
-                                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tight ${
-                                            sale.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
-                                            sale.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
-                                            'bg-rose-100 text-rose-700'
-                                        }`}>
-                                            {sale.status === 'Partially Paid' ? 'Partial' : sale.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-2">
-                                        <div className="flex items-center justify-start gap-1">
-                                            <button onClick={() => handleViewInvoice(sale)} title="View Invoice"
-                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
-                                                <DocumentTextIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                            {currentUser.role === 'admin' ? (
-                                                <button onClick={() => handleOpenEditInvoice(sale)} title="Edit Invoice"
-                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
-                                                    <EditIcon className="w-3.5 h-3.5" />
-                                                </button>
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-bold text-gray-900 text-[10px]">
+                                            {formatUGX(sale.total)}
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                            {balance > 0 ? (
+                                                <span className="font-bold text-rose-600 text-[10px]">{formatUGX(balance)}</span>
                                             ) : (
-                                                <button onClick={() => handleOpenNarration(sale)} title="Notes"
-                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-violet-50 text-violet-500 hover:bg-violet-100 transition-all active:scale-90">
-                                                    <EditIcon className="w-3.5 h-3.5" />
-                                                </button>
+                                                <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold text-[9px] uppercase">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                    Settled
+                                                </span>
                                             )}
-                                            {sale.status !== 'Paid' && (
-                                                <button onClick={() => handleOpenPayment(sale)} title="Receive Payment"
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tight ${
+                                                sale.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
+                                                sale.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
+                                                'bg-rose-100 text-rose-700'
+                                            }`}>
+                                                {sale.status === 'Partially Paid' ? 'Partial' : sale.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center justify-start gap-1">
+                                                <button onClick={() => handleViewInvoice(sale)} title="View Invoice"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
+                                                    <DocumentTextIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                                {currentUser.role === 'admin' ? (
+                                                    <button onClick={() => handleOpenEditInvoice(sale)} title="Edit Invoice"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                                                        <EditIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => handleOpenNarration(sale)} title="Notes"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-violet-50 text-violet-500 hover:bg-violet-100 transition-all active:scale-90">
+                                                        <EditIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                                {sale.status !== 'Paid' && (
+                                                    <button onClick={() => handleOpenPayment(sale)} title="Receive Payment"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
+                                                        <BanknotesIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                                {isLoggable(sale) && (
+                                                    <button onClick={() => handleOpenUsageModal(sale)} title="Log Usage"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 animate-blink active:scale-90">
+                                                        <BeakerIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                                {currentUser.role === 'admin' && (
+                                                    <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} title="Delete"
+                                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {filteredSales.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
+                                        No records found
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                ) : (
+                    <table className="w-full text-left table-fixed">
+                        <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-[0.12em]">
+                            <tr>
+                                <th className="px-4 py-3 w-[15%]">Ref</th>
+                                <th className="px-4 py-3 w-[25%]">Client</th>
+                                <th className="px-4 py-3 w-[20%]">Date</th>
+                                <th className="px-4 py-3 w-[15%] text-right">Value</th>
+                                <th className="px-4 py-3 w-[10%] text-center">Rules</th>
+                                <th className="px-4 py-3 w-[15%]">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {paginatedQuotations.map(quote => {
+                                const customer = customers.find(c => c.id === quote.customerId);
+                                return (
+                                    <tr key={quote.id} className="hover:bg-gray-50/50 transition-colors group">
+                                        <td className="px-4 py-2 font-mono font-bold text-yellow-600 text-[10px] truncate">
+                                            #{quote.id.substring(0, 7).toUpperCase()}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <p className="font-bold text-gray-900 text-[11px] uppercase truncate">{customer?.name || 'Guest'}</p>
+                                            <p className="text-[9px] text-gray-400 font-medium truncate">
+                                                {customer?.phone || '—'}
+                                            </p>
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-600 font-medium text-[10px]">
+                                            {new Date(quote.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
+                                            <span className="block text-[9px] text-gray-400">
+                                                {new Date(quote.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-bold text-gray-900 text-[10px]">
+                                            {formatUGX(quote.total)}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                            <span className="inline-block bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                                                {(quote.rules || []).length}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center justify-start gap-1">
+                                                <button onClick={() => handleViewQuotation(quote)} title="View/Print Quotation"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
+                                                    <DocumentTextIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button onClick={() => handleConvertQuoteToSale(quote)} title="Convert to Order Invoice"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
                                                     <BanknotesIcon className="w-3.5 h-3.5" />
                                                 </button>
-                                            )}
-                                            {isLoggable(sale) && (
-                                                <button onClick={() => handleOpenUsageModal(sale)} title="Log Usage"
-                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 animate-blink active:scale-90">
-                                                    <BeakerIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                            {currentUser.role === 'admin' && (
-                                                <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} title="Delete"
+                                                <button onClick={() => { setQuoteToDelete(quote.id); setIsConfirmDeleteQuoteOpen(true); }} title="Delete Quotation"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                                     <TrashIcon className="w-3.5 h-3.5" />
                                                 </button>
-                                            )}
-                                        </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {filteredQuotations.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
+                                        No quotations found
                                     </td>
                                 </tr>
-                            );
-                        })}
-                        {filteredSales.length === 0 && (
-                            <tr>
-                                <td colSpan={7} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
-                                    No records found
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            )}
+                        </tbody>
+                    </table>
+                )}
 
                 {/* Pagination Controls */}
-                {filteredSales.length > 0 && (
+                {((activeViewTab === 'sales' ? filteredSales.length : filteredQuotations.length) > 0) && (
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-50">
                         <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                            {filteredSales.length === 0 ? 'No records' : `Showing ${((currentPage - 1) * ITEMS_PER_PAGE) + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredSales.length)} of ${filteredSales.length} records`}
+                            {activeViewTab === 'sales' 
+                                ? (filteredSales.length === 0 ? 'No records' : `Showing ${((currentPage - 1) * ITEMS_PER_PAGE) + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredSales.length)} of ${filteredSales.length} records`)
+                                : (filteredQuotations.length === 0 ? 'No records' : `Showing ${((currentPage - 1) * ITEMS_PER_PAGE) + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredQuotations.length)} of ${filteredQuotations.length} records`)}
                         </p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1.5">
@@ -978,8 +1161,8 @@ const SalesView: React.FC<SalesViewProps> = ({
                 </div>
             </Modal>
 
-            {/* Confirmation of Transaction */}
-            <Modal isOpen={isAddSaleOpen} onClose={() => { setIsAddSaleOpen(false); clearQuote(); }} title="Transaction Authentication">
+            {/* Confirmation of Transaction / Quotation */}
+            <Modal isOpen={isAddSaleOpen} onClose={() => { setIsAddSaleOpen(false); clearQuote(); setConvertingQuote(null); }} title={isQuotationMode ? "Quotation Authentication" : "Transaction Authentication"}>
                 <div className="space-y-6">
                     <div>
                         <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Assign Bill to Client</label>
@@ -994,7 +1177,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                     <div className="bg-gray-50 p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-inner space-y-4">
                         <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-2 text-center">AGGREGATE BILL</h4>
                         <div className="max-h-48 overflow-y-auto pr-2 space-y-3 scrollbar-thin">
-                            {quoteForSale.map((item, i) => (
+                            {(convertingQuote ? convertingQuote.items : quoteForSale).map((item, i) => (
                                 <div key={i} className="flex justify-between items-start text-xs font-black uppercase">
                                     <span className="text-gray-600 flex-1 pr-6 truncate">{item.name} <span className="text-gray-400 font-bold lowercase ml-1">x{item.quantity}</span></span>
                                     <strong className="text-gray-900 whitespace-nowrap">{formatUGX(item.price * item.quantity)}</strong>
@@ -1005,38 +1188,40 @@ const SalesView: React.FC<SalesViewProps> = ({
                         <div className="pt-4 mt-2 border-t-2 border-dashed border-gray-200 space-y-1">
                             <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                 <span>Subtotal</span>
-                                <span>{formatUGX(subtotalQuote)}</span>
+                                <span>{formatUGX(convertingQuote ? convertingQuote.subtotal : subtotalQuote)}</span>
                             </div>
-                            {quoteDiscount > 0 && (
+                            {(convertingQuote ? convertingQuote.discount : quoteDiscount) > 0 && (
                                 <div className="flex justify-between items-center text-[10px] font-black text-rose-500 uppercase tracking-widest">
                                     <span>Discount (Applied)</span>
-                                    <span>-{formatUGX(quoteDiscount)}</span>
+                                    <span>-{formatUGX(convertingQuote ? convertingQuote.discount : quoteDiscount)}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-baseline pt-2">
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Final Payable</span>
-                                <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(totalQuote)}</span>
+                                <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(convertingQuote ? convertingQuote.total : totalQuote)}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Initial Remittance (UGX)</label>
-                        <input
-                            type="number"
-                            value={amountPaid || ''}
-                            onChange={e => setAmountPaid(parseInt(e.target.value) || 0)}
-                            className="w-full p-5 border-2 border-gray-100 rounded-[2rem] bg-white text-gray-900 font-black text-2xl focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 outline-none shadow-xl transition-all"
-                            placeholder="Enter cash amount..."
-                        />
-                    </div>
+                    {!isQuotationMode && (
+                        <div>
+                            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Initial Remittance (UGX)</label>
+                            <input
+                                type="number"
+                                value={amountPaid || ''}
+                                onChange={e => setAmountPaid(parseInt(e.target.value) || 0)}
+                                className="w-full p-5 border-2 border-gray-100 rounded-[2rem] bg-white text-gray-900 font-black text-2xl focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 outline-none shadow-xl transition-all"
+                                placeholder="Enter cash amount..."
+                            />
+                        </div>
+                    )}
 
                     <button
-                        onClick={handleCreateSale}
-                        disabled={!customerId || quoteForSale.length === 0}
+                        onClick={isQuotationMode ? handleCreateQuotation : handleCreateSale}
+                        disabled={!customerId || (convertingQuote ? convertingQuote.items : quoteForSale).length === 0}
                         className="w-full bg-[#1A2232] text-yellow-400 py-6 rounded-[2rem] font-black uppercase tracking-[0.25em] text-xs shadow-2xl active:scale-95 disabled:opacity-30 disabled:grayscale transition-all"
                     >
-                        Authenticate & Generate Invoice
+                        {isQuotationMode ? 'Authenticate & Save Quotation' : 'Authenticate & Generate Invoice'}
                     </button>
                 </div>
             </Modal>
@@ -1090,6 +1275,7 @@ const SalesView: React.FC<SalesViewProps> = ({
             </Modal>
 
             {selectedSale && <Invoice isOpen={isInvoiceOpen} onClose={() => setIsInvoiceOpen(false)} sale={selectedSale} settings={settings} />}
+            {selectedQuotation && <Invoice isOpen={isQuoteInvoiceOpen} onClose={() => setIsQuoteInvoiceOpen(false)} sale={{ ...selectedQuotation, status: 'Paid', amountPaid: selectedQuotation.total } as any} settings={settings} isQuotation={true} />}
 
             <ConfirmationModal
                 isOpen={isConfirmDeleteOpen}
@@ -1097,6 +1283,19 @@ const SalesView: React.FC<SalesViewProps> = ({
                 onConfirm={() => saleToDelete && onDeleteSale(saleToDelete)}
                 title="Administrative Purge"
                 message="This operation will permanently erase this transactional record from the master log. Proceed with authentication?"
+            />
+
+            <ConfirmationModal
+                isOpen={isConfirmDeleteQuoteOpen}
+                onClose={() => setIsConfirmDeleteQuoteOpen(false)}
+                onConfirm={async () => {
+                    if (quoteToDelete) {
+                        await onDeleteQuotation(quoteToDelete);
+                        setQuoteToDelete(null);
+                    }
+                }}
+                title="Quotation Deletion"
+                message="Are you sure you want to permanently delete this quotation?"
             />
         </div>
     );

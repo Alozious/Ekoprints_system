@@ -7,14 +7,13 @@ interface LogoProps {
 
 /**
  * Renders the Eko Prints brand logo.
- * Now points to the Google Drive direct thumbnail URL.
+ * Served from local /public/logo.png for faster load times.
  */
 const Logo: React.FC<LogoProps> = ({ className = "h-12", showTagline = false }) => {
   const [error, setError] = useState(false);
   
-  // File ID extracted from your link: 1PpzbvTQjgVf4YTreFUhpNef5vTFAU4SW
-  // The 'thumbnail' endpoint is more reliable for direct embedding than 'uc?id='
-  const logoPath = 'https://drive.google.com/thumbnail?id=1PpzbvTQjgVf4YTreFUhpNef5vTFAU4SW&sz=w1000';
+  // Local asset — served from /public/logo.png via Vite's static file server
+  const logoPath = '/logo.png';
 
   return (
     <div className={`flex flex-col items-center justify-center ${className}`}>

@@ -6,9 +6,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'a4';
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -24,16 +25,24 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
 
   if (!isOpen) return null;
 
+  const sizeClasses = {
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+    a4: 'max-w-[820px] h-[92vh]'
+  };
+
   const modalContent = (
     <div 
-      className="fixed inset-0 z-[99999] flex justify-center items-start overflow-y-auto bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 sm:p-8"
+      className="fixed inset-0 z-[99999] flex justify-center items-center overflow-hidden bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4"
       style={{ opacity: show ? 1 : 0 }}
     >
       {/* Background overlay click to close */}
       <div className="fixed inset-0 cursor-default" onClick={onClose}></div>
       
       <div 
-        className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col transform transition-all duration-300 ease-out z-10 my-auto"
+        className={`relative bg-white rounded-3xl shadow-2xl w-full ${sizeClasses[size]} flex flex-col transform transition-all duration-300 ease-out z-10`}
         style={{ 
           transform: show ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
           maxHeight: 'calc(100% - 2rem)'
@@ -53,8 +62,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
           </button>
         </div>
 
-        {/* Content - Scrollable area */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin p-6 sm:p-8">
+        {/* Content */}
+        <div className={`flex-1 flex flex-col min-h-0 ${size === 'a4' ? 'overflow-hidden p-2 sm:p-4 bg-gray-50' : 'overflow-y-auto scrollbar-thin p-6 sm:p-8'}`}>
           {children}
         </div>
       </div>

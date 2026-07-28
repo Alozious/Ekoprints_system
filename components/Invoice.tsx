@@ -83,8 +83,10 @@ const invoiceStyles = (bgUrl: string) => `
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   .inv-page {
-    width: 100%;
-    min-height: 100%;
+    width: 760px;
+    height: 1075px;
+    display: flex;
+    flex-direction: column;
     position: relative;
     font-family: 'Inter', -apple-system, sans-serif;
     color: #111827;
@@ -111,53 +113,70 @@ const invoiceStyles = (bgUrl: string) => `
   .inv-body {
     position: relative;
     z-index: 1;
-    padding: 85px 45px 35px;
+    padding: 60px 50px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex-grow: 1;
   }
 
   /* ── HEADER ── */
   .inv-header {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 30px;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 25px;
+    gap: 12px;
+    width: 100%;
   }
   .inv-logo { height: 75px; width: auto; object-fit: contain; display: block; }
-  .inv-contact { margin-top: 15px; display: flex; flex-direction: column; gap: 8px; }
-  .inv-contact-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 13px;
-    color: #374151;
+  .inv-header-divider {
+    width: 2px;
+    height: 70px;
+    background-color: #111827;
+    margin: 0 10px;
+    align-self: center;
+    flex-shrink: 0;
   }
-  .inv-contact-label { font-weight: 800; color: #111827; }
-  .inv-contact-text { font-weight: 500; }
+  .inv-contact-box {
+    border: 2px solid #6d28d9;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 14px;
+    color: #111827;
+    line-height: 1.5;
+    font-weight: 800;
+    flex-grow: 1;
+  }
 
-  .inv-meta { text-align: right; }
+  .inv-meta { text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
   .inv-ref {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 900;
     color: #111827;
     letter-spacing: -0.5px;
-    line-height: 1;
+    line-height: 1.1;
   }
-  .inv-date { font-size: 13px; color: #4b5563; font-weight: 600; margin-top: 6px; }
+  .inv-date { font-size: 12px; color: #4b5563; font-weight: 600; margin-top: 4px; margin-bottom: 10px; }
   .inv-badge {
-    display: inline-block;
-    margin-top: 12px;
-    padding: 8px 24px;
-    background: #f59e0b;
-    color: #1c1917;
-    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 11px 40px;
+    min-width: 200px;
+    background: #fbbf24;
+    color: #111827;
+    font-size: 16px;
     font-weight: 900;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    border-radius: 6px;
+    border-radius: 10px;
   }
   .inv-badge.paid   { background: #d1fae5; color: #065f46; }
   .inv-badge.partial{ background: #fef3c7; color: #92400e; }
   .inv-badge.unpaid { background: #fee2e2; color: #991b1b; }
-  .inv-badge.quote  { background: #fbbf24; color: #1c1917; }
+  .inv-badge.quote  { background: #fbbf24; color: #111827; }
 
   /* ── DIVIDER ── */
   .inv-divider { border: none; border-top: 1px solid rgba(0,0,0,0.12); margin: 0 0 25px; }
@@ -201,11 +220,18 @@ const invoiceStyles = (bgUrl: string) => `
   .inv-lower {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 30px;
-    margin-bottom: 35px;
+    margin-bottom: 25px;
   }
-  .inv-rules { flex: 1; }
+  .inv-rules-and-qr {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    flex: 1;
+  }
+  .inv-rules { width: 100%; }
   .inv-rules-label {
     font-size: 13px;
     font-weight: 900;
@@ -242,16 +268,16 @@ const invoiceStyles = (bgUrl: string) => `
   .inv-total-val.paid-c { color: #059669; }
 
   /* ── QR + FOOTER ── */
-  .inv-qr-row { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; }
+  .inv-qr-block { display: flex; flex-direction: column; align-items: flex-start; }
   .inv-qr-img { width: 75px; height: 75px; border: 1px solid #e5e7eb; border-radius: 6px; }
-  .inv-qr-label { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #6d28d9; margin-top: 4px; text-align: center; }
+  .inv-qr-label { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #6d28d9; margin-top: 4px; text-align: left; }
 
   .inv-footer {
     text-align: center;
     border-top: 1px solid rgba(0,0,0,0.1);
     padding-top: 20px;
   }
-  .inv-footer-logo { height: 28px; width: auto; margin: 0 auto 6px; display: block; }
+  .inv-footer-logo { display: none; }
   .inv-footer-name { font-size: 15px; font-weight: 900; letter-spacing: 0.05em; color: #111827; }
   .inv-footer-divider {
     width: 60px; height: 2px;
@@ -261,11 +287,39 @@ const invoiceStyles = (bgUrl: string) => `
   }
   .inv-footer-tagline { font-size: 12px; color: #4b5563; font-weight: 600; }
 
+  .inv-top-section {
+    flex-shrink: 0;
+  }
+  .inv-table-container {
+    flex-grow: 1;
+    margin-top: 15px;
+    margin-bottom: 15px;
+  }
+  .inv-bottom-section {
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+
   @media print {
     @page { margin: 0; size: A4; }
     body { margin: 0; background: transparent !important; }
-    .inv-page { min-height: 100vh; }
+    .inv-page {
+      width: 210mm !important;
+      height: 297mm !important;
+      display: flex !important;
+      flex-direction: column !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      page-break-after: always !important;
+    }
     .inv-bg { opacity: 0.15 !important; }
+    .inv-body {
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      height: 100% !important;
+      padding: 60px 50px !important;
+    }
     .no-print { display: none !important; }
   }
 `;
@@ -292,10 +346,135 @@ function buildPrintHtml(params: {
   const paidRowHtml = !isQuotation ? `
     <div class="inv-total-row">
       <span class="inv-total-lbl">Paid</span>
-      <span class="inv-total-val paid-c">${fmt(paid)} UGX</span>
+      <span class="inv-total-val paid-c">${fmt(paid)}</span>
     </div>
-    ${balance > 0 ? `<div class="inv-total-row"><span class="inv-total-lbl">Balance</span><span class="inv-total-val disc">${fmt(balance)} UGX</span></div>` : ''}
+    ${balance > 0 ? `<div class="inv-total-row"><span class="inv-total-lbl">Balance</span><span class="inv-total-val disc">${fmt(balance)}</span></div>` : ''}
   ` : '';
+
+  // Paginate items
+  const itemsPerPageFirst = 6;
+  const itemsPerPageSubsequent = 8;
+  const pages = [];
+  const itemsCopy = [...sale.items];
+  pages.push(itemsCopy.splice(0, itemsPerPageFirst));
+  while (itemsCopy.length > 0) {
+    pages.push(itemsCopy.splice(0, itemsPerPageSubsequent));
+  }
+
+  const pagesHtml = pages.map((pageItems, pageIndex) => {
+    const isFirstPage = pageIndex === 0;
+    const isLastPage = pageIndex === pages.length - 1;
+
+    const headerHtml = isFirstPage ? `
+      <div class="inv-header">
+        <img src="${logoUrl}" class="inv-logo" alt="Logo"/>
+        <div class="inv-header-divider"></div>
+        <div class="inv-contact-box">
+          <div>Call: ${settings.businessPhone}</div>
+          <div>Email: ${settings.businessEmail}</div>
+          <div>${settings.businessLocation}</div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px;">
+        <div>
+          <span class="inv-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="inv-meta">
+          <div class="inv-ref">${refPrefix}-#${sale.id.substring(0, 8).toUpperCase()}</div>
+          <div class="inv-date">Date: ${new Date(sale.date).toLocaleDateString()}</div>
+        </div>
+      </div>
+
+      <hr class="inv-divider"/>
+
+      <!-- CLIENT -->
+      <div class="inv-client-label">${isQuotation ? 'Prepared For' : 'Billed To'}</div>
+      <div class="inv-client-name">${sale.customer.name}${sale.customer.phone ? `<span style="font-size:14px;font-weight:500;color:#6b7280;margin-left:10px;">${sale.customer.phone}</span>` : ''}</div>
+    ` : ``;
+
+    const tableHtml = `
+      <!-- TABLE -->
+      <div class="inv-table-container">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Item Description</th>
+              <th class="r">Qty</th>
+              <th class="r">Price</th>
+              <th class="r">Total (UGX)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pageItems.map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td class="r">${item.quantity}</td>
+                <td class="price">${fmt(item.price)}</td>
+                <td class="r">${fmt(item.price * item.quantity)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const bottomHtml = isLastPage ? `
+      <div class="inv-bottom-section">
+        <!-- LOWER: rules + totals + QR -->
+        <div class="inv-lower">
+          <div class="inv-rules-and-qr">
+            ${rulesHtml ? `<div class="inv-rules">${rulesHtml}</div>` : ''}
+            <div class="inv-qr-block">
+              <img src="${qrUrl}" class="inv-qr-img" alt="QR"/>
+              <div class="inv-qr-label">Eko Verify</div>
+            </div>
+          </div>
+          <div class="inv-totals">
+            <div class="inv-total-row">
+              <span class="inv-total-lbl">Subtotal</span>
+              <span class="inv-total-val">${fmt(subtotal)}</span>
+            </div>
+            ${discount > 0 ? `<div class="inv-total-row"><span class="inv-total-lbl">Discount (${discountPercent.toFixed(1)}%)</span><span class="inv-total-val disc">-${fmt(discount)}</span></div>` : ''}
+            ${paidRowHtml}
+            <div class="inv-total-row grand">
+              <span class="inv-total-lbl">${isQuotation ? 'Estimated Total' : 'Grand Total'}</span>
+              <span class="inv-total-val">${fmt(grandTotal)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="inv-footer">
+          <div class="inv-footer-name">${settings.businessName.toUpperCase()}</div>
+          <div class="inv-footer-divider"></div>
+          <div class="inv-footer-tagline">Your Brand Our Passion | Thank you For Choosing Us</div>
+        </div>
+      </div>
+    ` : `
+      <div class="inv-bottom-section">
+        <!-- FOOTER -->
+        <div class="inv-footer">
+          <div class="inv-footer-name">${settings.businessName.toUpperCase()}</div>
+          <div class="inv-footer-divider"></div>
+          <div class="inv-footer-tagline">Your Brand Our Passion | Thank you For Choosing Us</div>
+        </div>
+      </div>
+    `;
+
+    return `
+      <div class="inv-page">
+        <div class="inv-bg"></div>
+        <div class="inv-body">
+          <div class="inv-top-section">
+            ${headerHtml}
+          </div>
+          ${tableHtml}
+          ${bottomHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html>
@@ -306,117 +485,11 @@ function buildPrintHtml(params: {
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   body { margin:0; padding:0; background:#fff; }
   ${invoiceStyles(bgUrl)}
-  /* Ensure circles show up beautifully in print */
-  .inv-icon-circle {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background-color: #6d28d9 !important;
-    color: #ffffff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
 </style>
 </head>
 <body>
-<div class="inv-page">
-  <div class="inv-bg"></div>
-  <div class="inv-body">
-    <!-- HEADER -->
-    <div class="inv-header">
-      <div>
-        <img src="${logoUrl}" class="inv-logo" alt="Logo"/>
-        <div class="inv-contact">
-          <div class="inv-contact-row">
-            <div class="inv-icon-circle" style="width:24px;height:24px;border-radius:50%;background-color:#6d28d9;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            </div>
-            <span><span class="inv-contact-label">Email:</span> ${settings.businessEmail}</span>
-          </div>
-          <div class="inv-contact-row">
-            <div class="inv-icon-circle" style="width:24px;height:24px;border-radius:50%;background-color:#6d28d9;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 21 17z"/></svg>
-            </div>
-            <span><span class="inv-contact-label">Tel:</span> ${settings.businessPhone}</span>
-          </div>
-          <div class="inv-contact-row">
-            <div class="inv-icon-circle" style="width:24px;height:24px;border-radius:50%;background-color:#6d28d9;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
-            </div>
-            <span><span class="inv-contact-label">Location:</span><br/>${settings.businessLocation}</span>
-          </div>
-        </div>
-      </div>
-      <div class="inv-meta">
-        <div class="inv-ref">${refPrefix}-#${sale.id.substring(0, 8).toUpperCase()}</div>
-        <div class="inv-date">Date: ${new Date(sale.date).toLocaleDateString()}</div>
-        <span class="inv-badge ${badgeClass}">${badgeText}</span>
-      </div>
-    </div>
-
-    <hr class="inv-divider"/>
-
-    <!-- CLIENT -->
-    <div class="inv-client-label">${isQuotation ? 'Prepared For' : 'Billed To'}</div>
-    <div class="inv-client-name">${sale.customer.name}${sale.customer.phone ? `<span style="font-size:14px;font-weight:500;color:#6b7280;margin-left:10px;">${sale.customer.phone}</span>` : ''}</div>
-
-    <!-- TABLE -->
-    <table class="inv-table">
-      <thead>
-        <tr>
-          <th>Item Description</th>
-          <th class="r">Qty</th>
-          <th class="r">Price</th>
-          <th class="r">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${sale.items.map(item => `
-          <tr>
-            <td>${item.name}</td>
-            <td class="r">${item.quantity}</td>
-            <td class="price">${fmt(item.price)}</td>
-            <td class="r">${fmt(item.price * item.quantity)} UGX</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <!-- LOWER: rules + totals -->
-    <div class="inv-lower">
-      <div class="inv-rules">${rulesHtml}</div>
-      <div class="inv-totals">
-        <div class="inv-total-row">
-          <span class="inv-total-lbl">Subtotal</span>
-          <span class="inv-total-val">${fmt(subtotal)} UGX</span>
-        </div>
-        ${discount > 0 ? `<div class="inv-total-row"><span class="inv-total-lbl">Discount (${discountPercent.toFixed(1)}%)</span><span class="inv-total-val disc">-${fmt(discount)} UGX</span></div>` : ''}
-        ${paidRowHtml}
-        <div class="inv-total-row grand">
-          <span class="inv-total-lbl">${isQuotation ? 'Estimated Total' : 'Grand Total'}</span>
-          <span class="inv-total-val">${fmt(grandTotal)} UGX</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- QR -->
-    <div class="inv-qr-row">
-      <div>
-        <img src="${qrUrl}" class="inv-qr-img" alt="QR"/>
-        <div class="inv-qr-label">Eko Verify</div>
-      </div>
-    </div>
-
-    <!-- FOOTER -->
-    <div class="inv-footer">
-      <img src="${logoUrl}" class="inv-footer-logo" alt="${settings.businessName}"/>
-      <div class="inv-footer-name">${settings.businessName.toUpperCase()}</div>
-      <div class="inv-footer-divider"></div>
-      <div class="inv-footer-tagline">${settings.receiptFooter}</div>
-    </div>
-  </div>
-</div>
-<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}</script>
+  ${pagesHtml}
+  <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}</script>
 </body>
 </html>`;
 }
@@ -435,6 +508,16 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings, isQu
   const refPrefix = isQuotation ? 'QT' : 'INV';
   const badgeLabel = isQuotation ? 'Quotation' : sale.status;
   const badgeClass = isQuotation ? 'inv-badge quote' : (sale.status === 'Paid' ? 'inv-badge paid' : sale.status === 'Partially Paid' ? 'inv-badge partial' : 'inv-badge unpaid');
+
+  // Paginate items for preview
+  const itemsPerPageFirst = 6;
+  const itemsPerPageSubsequent = 8;
+  const pages = [];
+  const itemsCopy = [...sale.items];
+  pages.push(itemsCopy.splice(0, itemsPerPageFirst));
+  while (itemsCopy.length > 0) {
+    pages.push(itemsCopy.splice(0, itemsPerPageSubsequent));
+  }
 
   /* A4 export */
   const handlePrintA4 = () => {
@@ -515,136 +598,159 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isQuotation ? 'Quotation Detail' : 'Invoice Detail'}>
+    <Modal isOpen={isOpen} onClose={onClose} title={isQuotation ? 'Quotation Detail' : 'Invoice Detail'} size="a4">
       <style>{invoiceStyles(bgAsset)}</style>
 
       {/* ── On-screen preview ── */}
-      <div className="bg-gray-100 p-2 sm:p-4 rounded-xl overflow-x-hidden">
-        <div className="inv-page shadow-xl mx-auto rounded-2xl overflow-hidden" style={{ maxWidth: 720 }} ref={invoiceRef}>
-          <div className="inv-bg" />
-          <div className="inv-body">
+      <div className="bg-gray-100 p-4 rounded-2xl flex-1 overflow-y-auto flex flex-col items-center gap-6 scrollbar-thin">
+        {pages.map((pageItems, pageIndex) => {
+          const isFirstPage = pageIndex === 0;
+          const isLastPage = pageIndex === pages.length - 1;
 
-            {/* HEADER */}
-            <div className="inv-header">
-              <div>
-                <img src={logoAsset} className="inv-logo" alt="Logo" />
-                <div className="inv-contact">
-                  <div className="inv-contact-row">
-                    <span className="inv-contact-icon"><EmailIcon /></span>
-                    <span><span className="inv-contact-label">Email:</span> <span className="inv-contact-text">{settings.businessEmail}</span></span>
-                  </div>
-                  <div className="inv-contact-row">
-                    <span className="inv-contact-icon"><PhoneIcon /></span>
-                    <span><span className="inv-contact-label">Tel:</span> <span className="inv-contact-text">{settings.businessPhone}</span></span>
-                  </div>
-                  <div className="inv-contact-row">
-                    <span className="inv-contact-icon"><LocationIcon /></span>
-                    <span><span className="inv-contact-label">Location:</span><br /><span className="inv-contact-text">{settings.businessLocation}</span></span>
-                  </div>
-                </div>
-              </div>
-              <div className="inv-meta">
-                <div className="inv-ref">{refPrefix}-#{sale.id.substring(0, 8).toUpperCase()}</div>
-                <div className="inv-date">Date: {new Date(sale.date).toLocaleDateString()}</div>
-                <span className={badgeClass}>{badgeLabel}</span>
-              </div>
-            </div>
-
-            <hr className="inv-divider" />
-
-            {/* CLIENT */}
-            <div className="inv-client-label">{isQuotation ? 'Prepared For' : 'Billed To'}</div>
-            <div className="inv-client-name">
-              {sale.customer.name}
-              {sale.customer.phone && (
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#4b5563', marginLeft: 10 }}>
-                  {sale.customer.phone}
-                </span>
-              )}
-            </div>
-
-            {/* TABLE */}
-            <table className="inv-table">
-              <thead>
-                <tr>
-                  <th>Item Description</th>
-                  <th className="r">Qty</th>
-                  <th className="r">Price</th>
-                  <th className="r">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sale.items.map((item, i) => (
-                  <tr key={i}>
-                    <td>{item.name}</td>
-                    <td className="r">{item.quantity}</td>
-                    <td className="price">{fmt(item.price)}</td>
-                    <td className="r">{fmt(item.price * item.quantity)} UGX</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* LOWER: rules + totals */}
-            <div className="inv-lower">
-              <div className="inv-rules">
-                {sale.rules && sale.rules.length > 0 && (
-                  <>
-                    <div className="inv-rules-label">Invoice Terms &amp; Rules</div>
-                    <ul>{sale.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
-                  </>
-                )}
-              </div>
-              <div className="inv-totals">
-                <div className="inv-total-row">
-                  <span className="inv-total-lbl">Subtotal</span>
-                  <span className="inv-total-val">{fmt(subtotal)} UGX</span>
-                </div>
-                {discount > 0 && (
-                  <div className="inv-total-row">
-                    <span className="inv-total-lbl">Discount ({discountPercent.toFixed(1)}%)</span>
-                    <span className="inv-total-val disc">-{fmt(discount)} UGX</span>
-                  </div>
-                )}
-                {!isQuotation && (
-                  <>
-                    <div className="inv-total-row">
-                      <span className="inv-total-lbl">Paid</span>
-                      <span className="inv-total-val paid-c">{fmt(paid)} UGX</span>
-                    </div>
-                    {balance > 0 && (
-                      <div className="inv-total-row">
-                        <span className="inv-total-lbl">Balance</span>
-                        <span className="inv-total-val disc">{fmt(balance)} UGX</span>
+          return (
+            <div 
+              key={pageIndex} 
+              className="inv-page shadow-xl rounded-2xl overflow-hidden bg-white shrink-0" 
+              ref={pageIndex === 0 ? invoiceRef : null}
+            >
+              <div className="inv-bg" />
+              <div className="inv-body">
+                
+                {/* TOP SECTION */}
+                <div className="inv-top-section">
+                  {isFirstPage ? (
+                    <>
+                      {/* HEADER */}
+                      <div className="inv-header">
+                        <img src={logoAsset} className="inv-logo" alt="Logo" />
+                        <div className="inv-header-divider"></div>
+                        <div className="inv-contact-box">
+                          <div>Call: {settings.businessPhone}</div>
+                          <div>Email: {settings.businessEmail}</div>
+                          <div>{settings.businessLocation}</div>
+                        </div>
                       </div>
-                    )}
-                  </>
-                )}
-                <div className="inv-total-row grand">
-                  <span className="inv-total-lbl">{isQuotation ? 'Estimated Total' : 'Grand Total'}</span>
-                  <span className="inv-total-val">{fmt(grandTotal)} UGX</span>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 25 }}>
+                        <div>
+                          <span className={badgeClass}>{badgeLabel}</span>
+                        </div>
+                        <div className="inv-meta">
+                          <div className="inv-ref">{refPrefix}-#{sale.id.substring(0, 8).toUpperCase()}</div>
+                          <div className="inv-date">Date: {new Date(sale.date).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+
+                      <hr className="inv-divider" />
+
+                      {/* CLIENT */}
+                      <div className="inv-client-label">{isQuotation ? 'Prepared For' : 'Billed To'}</div>
+                      <div className="inv-client-name">
+                        {sale.customer.name}
+                        {sale.customer.phone && (
+                          <span style={{ fontSize: 14, fontWeight: 500, color: '#4b5563', marginLeft: 10 }}>
+                            {sale.customer.phone}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
+
+                {/* TABLE CONTAINER */}
+                <div className="inv-table-container">
+                  <table className="inv-table">
+                    <thead>
+                      <tr>
+                        <th>Item Description</th>
+                        <th className="r">Qty</th>
+                        <th className="r">Price</th>
+                        <th className="r">Total (UGX)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageItems.map((item, i) => (
+                        <tr key={i}>
+                          <td>{item.name}</td>
+                          <td className="r">{item.quantity}</td>
+                          <td className="price">{fmt(item.price)}</td>
+                          <td className="r">{fmt(item.price * item.quantity)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* BOTTOM SECTION */}
+                <div className="inv-bottom-section">
+                  {isLastPage ? (
+                    <>
+                      {/* LOWER: rules + totals + QR */}
+                      <div className="inv-lower">
+                        <div className="inv-rules-and-qr">
+                          {sale.rules && sale.rules.length > 0 && (
+                            <div className="inv-rules">
+                              <div className="inv-rules-label">Invoice Terms &amp; Rules</div>
+                              <ul>{sale.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                            </div>
+                          )}
+                          <div className="inv-qr-block">
+                            <img src={qrCodeUrl} className="inv-qr-img" alt="QR" />
+                            <div className="inv-qr-label">Eko Verify</div>
+                          </div>
+                        </div>
+                        <div className="inv-totals">
+                          <div className="inv-total-row">
+                            <span className="inv-total-lbl">Subtotal</span>
+                            <span className="inv-total-val">{fmt(subtotal)}</span>
+                          </div>
+                          {discount > 0 && (
+                            <div className="inv-total-row">
+                              <span className="inv-total-lbl">Discount ({discountPercent.toFixed(1)}%)</span>
+                              <span className="inv-total-val disc">-{fmt(discount)}</span>
+                            </div>
+                          )}
+                          {!isQuotation && (
+                            <>
+                              <div className="inv-total-row">
+                                <span className="inv-total-lbl">Paid</span>
+                                <span className="inv-total-val paid-c">{fmt(paid)}</span>
+                              </div>
+                              {balance > 0 && (
+                                <div className="inv-total-row">
+                                  <span className="inv-total-lbl">Balance</span>
+                                  <span className="inv-total-val disc">{fmt(balance)}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <div className="inv-total-row grand">
+                            <span className="inv-total-lbl">{isQuotation ? 'Estimated Total' : 'Grand Total'}</span>
+                            <span className="inv-total-val">{fmt(grandTotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* FOOTER */}
+                      <div className="inv-footer">
+                        <div className="inv-footer-name">{settings.businessName.toUpperCase()}</div>
+                        <div className="inv-footer-divider" />
+                        <div className="inv-footer-tagline">Your Brand Our Passion | Thank you For Choosing Us</div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="inv-footer">
+                      <div className="inv-footer-name">{settings.businessName.toUpperCase()}</div>
+                      <div className="inv-footer-divider" />
+                      <div className="inv-footer-tagline">Your Brand Our Passion | Thank you For Choosing Us</div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
-
-            {/* QR */}
-            <div className="inv-qr-row">
-              <div>
-                <img src={qrCodeUrl} className="inv-qr-img" alt="QR" />
-                <div className="inv-qr-label">Eko Verify</div>
-              </div>
-            </div>
-
-            {/* FOOTER */}
-            <div className="inv-footer">
-              <img src={logoAsset} className="inv-footer-logo" alt={settings.businessName} />
-              <div className="inv-footer-name">{settings.businessName.toUpperCase()}</div>
-              <div className="inv-footer-divider" />
-              <div className="inv-footer-tagline">{settings.receiptFooter}</div>
-            </div>
-
-          </div>
-        </div>
+          );
+        })}
       </div>
 
       {/* ── Action buttons ── */}

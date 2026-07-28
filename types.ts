@@ -94,6 +94,7 @@ export interface Sale {
   total: number; // Final grand total after discount
   subtotal?: number; // Total before discount
   discount?: number; // Amount discounted
+  taxPercent?: number;
   amountPaid?: number;
   status: 'Paid' | 'Unpaid' | 'Pending' | 'Partially Paid';
   userId: string;
@@ -111,6 +112,7 @@ export interface Quotation {
   customerId: string;
   subtotal: number;
   discount: number;
+  taxPercent?: number;
   total: number;
   userId: string;
   userName?: string;

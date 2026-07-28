@@ -64,6 +64,7 @@ const App: React.FC = () => {
     const [quoteNarration, setQuoteNarration] = useState('');
     const [quoteDiscount, setQuoteDiscount] = useState(0);
     const [quoteRules, setQuoteRules] = useState<string[]>([]);
+    const [quoteTax, setQuoteTax] = useState(0);
     const [isQuotationMode, setIsQuotationMode] = useState(false);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -302,7 +303,7 @@ const App: React.FC = () => {
                         {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView
-                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} quoteRules={quoteRules} isQuotationMode={isQuotationMode} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); setQuoteRules([]); setIsQuotationMode(false); }}
+                                sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} quoteRules={quoteRules} quoteTax={quoteTax} isQuotationMode={isQuotationMode} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); setQuoteRules([]); setQuoteTax(0); setIsQuotationMode(false); }}
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}

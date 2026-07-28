@@ -221,6 +221,11 @@ const App: React.FC = () => {
         await deleteDocument('quotations', id, setQuotations, 'Quotation deleted.');
     }, [deleteDocument]);
 
+    const handleUpdateQuotation = useCallback(async (quotation: Quotation) => {
+        const { id, ...data } = quotation;
+        await updateDocument('quotations', id, data, setQuotations, 'Quotation updated successfully.');
+    }, [updateDocument]);
+
     const handleUpdateSale = useCallback(async (sale: Sale) => {
         const { id, ...data } = sale;
         await updateDocument('sales', id, data, setSales, 'Sale updated successfully.');
@@ -301,7 +306,7 @@ const App: React.FC = () => {
                                 onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
-                                settings={settings} quotations={quotations} onAddQuotation={handleAddQuotation} onDeleteQuotation={handleDeleteQuotation}
+                                settings={settings} quotations={quotations} onAddQuotation={handleAddQuotation} onDeleteQuotation={handleDeleteQuotation} onUpdateQuotation={handleUpdateQuotation}
                             />
                         )}
                         {activeView === 'Calculator' && (

@@ -29,7 +29,25 @@ interface SalesViewProps {
     quotations: Quotation[];
     onAddQuotation: (quoteData: Omit<Quotation, 'id'>) => Promise<void>;
     onDeleteQuotation: (id: string) => Promise<void>;
+    onUpdateQuotation?: (quotation: Quotation) => Promise<void>;
 }
+
+const CONVERSION_TO_METER: Record<string, number> = {
+    m: 1,
+    cm: 0.01,
+    mm: 0.001,
+    in: 0.0254,
+    ft: 0.3048,
+};
+
+const PAPER_SIZES: Record<string, { width: number; height: number }> = {
+    'A5': { width: 14.8, height: 21.0 },
+    'A4': { width: 21.0, height: 29.7 },
+    'A3': { width: 29.7, height: 42.0 },
+    'A2': { width: 42.0, height: 59.4 },
+    'A1': { width: 59.4, height: 84.1 },
+    'A0': { width: 84.1, height: 118.9 },
+};
 
 const formatUGX = (amount: number) => {
     if (typeof amount !== 'number' || isNaN(amount)) return '0 UGX';
@@ -247,7 +265,7 @@ const SearchableMaterialSelect: React.FC<{
 
 const SalesView: React.FC<SalesViewProps> = ({
     sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, quoteRules, isQuotationMode, clearQuote,
-    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, onStockOut, settings, quotations, onAddQuotation, onDeleteQuotation
+    onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, pricingTiers, onStockOut, settings, quotations, onAddQuotation, onDeleteQuotation, onUpdateQuotation
 }) => {
     const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
     const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
@@ -260,11 +278,28 @@ const SalesView: React.FC<SalesViewProps> = ({
     const [payingSale, setPayingSale] = useState<Sale | null>(null);
     const [saleForUsage, setSaleForUsage] = useState<Sale | null>(null);
     const [saleForNarration, setSaleForNarration] = useState<Sale | null>(null);
-    const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
-
+    
+    // Unified Document Edit state (Invoice or Quotation)
+    const [docToEdit, setDocToEdit] = useState<Sale | Quotation | null>(null);
+    const [editingDocType, setEditingDocType] = useState<'sale' | 'quotation'>('sale');
     const [editedItems, setEditedItems] = useState<SaleItem[]>([]);
     const [editedDiscount, setEditedDiscount] = useState(0);
     const [editedNarration, setEditedNarration] = useState('');
+
+    // Mini Dimension Calculator State
+    const [isMiniCalcOpen, setIsMiniCalcOpen] = useState(false);
+    const [miniCalcIndex, setMiniCalcIndex] = useState<number | null>(null);
+    const [mcStockItem, setMcStockItem] = useState<string>('');
+    const [mcLength, setMcLength] = useState<number>(1);
+    const [mcLengthUnit, setMcLengthUnit] = useState<'cm' | 'mm' | 'm' | 'in' | 'ft'>('m');
+    const [mcWidth, setMcWidth] = useState<number>(1);
+    const [mcWidthUnit, setMcWidthUnit] = useState<'cm' | 'mm' | 'm' | 'in' | 'ft'>('m');
+    const [mcTier, setMcTier] = useState<string>('');
+    const [mcQuantity, setMcQuantity] = useState<number>(1);
+    const [mcNegotiatedPrice, setMcNegotiatedPrice] = useState<number>(0);
+    const [mcExtraAmount, setMcExtraAmount] = useState<number>(0);
+    const [mcExtraLabel, setMcExtraLabel] = useState<string>('');
+    const [mcCustomName, setMcCustomName] = useState<string>('');
 
     const [usageEntries, setUsageEntries] = useState<{ [key: string]: { skuId: string, meters: number } }>({});
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -405,17 +440,38 @@ const SalesView: React.FC<SalesViewProps> = ({
         }
     };
 
-    const handleOpenEditInvoice = (sale: Sale) => {
-        setSaleToEdit(sale);
-        setEditedItems([...sale.items]);
-        setEditedDiscount(sale.discount || 0);
-        setEditedNarration(sale.notes || '');
+    const handleOpenEditDocument = (doc: Sale | Quotation, type: 'sale' | 'quotation') => {
+        setDocToEdit(doc);
+        setEditingDocType(type);
+        setEditedItems(doc.items.map(item => ({ ...item })));
+        setEditedDiscount(doc.discount || 0);
+        setEditedNarration(doc.notes || '');
         setIsEditInvoiceModalOpen(true);
     };
 
-    const handleUpdateItemInEdit = (index: number, field: keyof SaleItem, value: any) => {
+    const handleUpdateItemName = (index: number, name: string) => {
         const newList = [...editedItems];
-        newList[index] = { ...newList[index], [field]: value };
+        newList[index] = { ...newList[index], name };
+        setEditedItems(newList);
+    };
+
+    const handleUpdateItemQuantity = (index: number, qty: number) => {
+        const newList = [...editedItems];
+        const validQty = Math.max(1, qty);
+        newList[index] = { ...newList[index], quantity: validQty };
+        setEditedItems(newList);
+    };
+
+    const handleUpdateItemUnitPrice = (index: number, unitPrice: number) => {
+        const newList = [...editedItems];
+        newList[index] = { ...newList[index], price: Math.max(0, unitPrice) };
+        setEditedItems(newList);
+    };
+
+    const handleUpdateItemTotalAmount = (index: number, totalAmount: number) => {
+        const newList = [...editedItems];
+        const qty = newList[index].quantity || 1;
+        newList[index] = { ...newList[index], price: Math.max(0, totalAmount) / qty };
         setEditedItems(newList);
     };
 
@@ -423,32 +479,148 @@ const SalesView: React.FC<SalesViewProps> = ({
         setEditedItems(prev => prev.filter((_, i) => i !== index));
     };
 
+    const handleAddNewItemToEdit = () => {
+        const newItem: SaleItem = {
+            itemId: `manual-edit-${Date.now()}`,
+            name: 'New Custom Item',
+            quantity: 1,
+            price: 0,
+            metadata: {
+                type: 'manual',
+                tab: 'products',
+                manualItemName: 'New Custom Item',
+                manualPrice: 0,
+                manualQuantity: 1
+            }
+        };
+        setEditedItems(prev => [...prev, newItem]);
+    };
+
+    // Mini Calc Handlers
+    const handleOpenMiniCalc = (index: number) => {
+        const item = editedItems[index];
+        if (!item) return;
+
+        setMiniCalcIndex(index);
+        const meta = item.metadata;
+        const stockDefault = meta?.selectedStockItem || stockItems[0]?.skuId || '';
+
+        setMcStockItem(stockDefault);
+        setMcLength(meta?.length || 1);
+        setMcLengthUnit((meta?.lengthUnit as any) || 'm');
+        setMcWidth(meta?.width || 1);
+        setMcWidthUnit((meta?.widthUnit as any) || 'm');
+        setMcTier(meta?.selectedTier || '');
+        setMcQuantity(item.quantity || 1);
+        setMcNegotiatedPrice(meta?.negotiatedDimPrice || item.price || 0);
+        setMcExtraAmount(meta?.extraAmount || 0);
+        setMcExtraLabel(meta?.extraAmountLabel || '');
+        setMcCustomName(item.name || '');
+
+        setIsMiniCalcOpen(true);
+    };
+
+    // Mini Calc Math
+    const mcLengthInMeters = (mcLength || 0) * (CONVERSION_TO_METER[mcLengthUnit] || 1);
+    const mcWidthInMeters = (mcWidth || 0) * (CONVERSION_TO_METER[mcWidthUnit] || 1);
+    const mcAreaInSqCm = (mcLengthInMeters * 100) * (mcWidthInMeters * 100);
+
+    const mcTiersForStock = useMemo(() => {
+        const item = stockItems.find(s => s.skuId === mcStockItem);
+        if (!item) return [];
+        return pricingTiers.filter(t => t.categoryId === item.categoryId);
+    }, [mcStockItem, stockItems, pricingTiers]);
+
+    const mcCalculatedBasePrice = useMemo(() => {
+        if (!mcTier) return mcNegotiatedPrice;
+        const tierObj = mcTiersForStock.find(t => t.id === mcTier);
+        if (!tierObj) return mcNegotiatedPrice;
+        return Math.round(mcAreaInSqCm * tierObj.value);
+    }, [mcTier, mcTiersForStock, mcAreaInSqCm, mcNegotiatedPrice]);
+
+    const mcEffectiveUnitPrice = (mcTier ? mcCalculatedBasePrice : mcNegotiatedPrice) + (mcQuantity > 0 ? (mcExtraAmount / mcQuantity) : 0);
+    const mcLineTotal = mcEffectiveUnitPrice * mcQuantity;
+
+    const handleApplyMiniCalc = () => {
+        if (miniCalcIndex === null) return;
+        const selectedStock = stockItems.find(s => s.skuId === mcStockItem);
+        const stockName = selectedStock?.itemName || 'Custom Item';
+        const defaultGeneratedName = `${stockName} (${mcLengthInMeters.toFixed(2)}m x ${mcWidthInMeters.toFixed(2)}m)`;
+        const finalName = mcCustomName.trim() || defaultGeneratedName;
+
+        const updatedItem: SaleItem = {
+            ...editedItems[miniCalcIndex],
+            name: finalName,
+            quantity: mcQuantity,
+            price: mcEffectiveUnitPrice,
+            metadata: {
+                type: 'dimension',
+                tab: 'large-format',
+                length: mcLength,
+                lengthUnit: mcLengthUnit,
+                width: mcWidth,
+                widthUnit: mcWidthUnit,
+                selectedStockItem: mcStockItem,
+                selectedTier: mcTier,
+                negotiatedDimPrice: mcTier ? mcCalculatedBasePrice : mcNegotiatedPrice,
+                extraAmount: mcExtraAmount,
+                extraAmountLabel: mcExtraLabel
+            }
+        };
+
+        const newList = [...editedItems];
+        newList[miniCalcIndex] = updatedItem;
+        setEditedItems(newList);
+        setIsMiniCalcOpen(false);
+        setMiniCalcIndex(null);
+    };
+
     const handleSaveInvoiceEdit = async () => {
-        if (!saleToEdit) return;
+        if (!docToEdit) return;
         if (editedItems.length === 0) {
-            addToast("Invoice must contain at least one item. Use delete to remove entire sale.", "error");
+            addToast("Record must contain at least one item.", "error");
             return;
         }
 
         const newSubtotal = editedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const newTotal = newSubtotal - editedDiscount;
-        const paid = saleToEdit.amountPaid || 0;
-        const newStatus = paid >= newTotal ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid';
+        const newTotal = Math.max(0, newSubtotal - editedDiscount);
 
-        const updatedSale: Sale = {
-            ...saleToEdit,
-            items: editedItems,
-            subtotal: newSubtotal,
-            discount: editedDiscount,
-            total: newTotal,
-            status: newStatus,
-            notes: editedNarration
-        };
+        if (editingDocType === 'sale') {
+            const sale = docToEdit as Sale;
+            const paid = sale.amountPaid || 0;
+            const newStatus = paid >= newTotal ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid';
 
-        await onUpdateSale(updatedSale);
-        addToast("Invoice contents updated successfully.", "success");
+            const updatedSale: Sale = {
+                ...sale,
+                items: editedItems,
+                subtotal: newSubtotal,
+                discount: editedDiscount,
+                total: newTotal,
+                status: newStatus,
+                notes: editedNarration
+            };
+
+            await onUpdateSale(updatedSale);
+            addToast("Invoice contents updated successfully.", "success");
+        } else if (editingDocType === 'quotation') {
+            const quote = docToEdit as Quotation;
+            const updatedQuote: Quotation = {
+                ...quote,
+                items: editedItems,
+                subtotal: newSubtotal,
+                discount: editedDiscount,
+                total: newTotal,
+                notes: editedNarration
+            };
+
+            if (onUpdateQuotation) {
+                await onUpdateQuotation(updatedQuote);
+                addToast("Quotation updated successfully.", "success");
+            }
+        }
+
         setIsEditInvoiceModalOpen(false);
-        setSaleToEdit(null);
+        setDocToEdit(null);
     };
 
     const handleOpenPayment = (sale: Sale) => {
@@ -821,7 +993,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                     <DocumentTextIcon className="w-3.5 h-3.5" />
                                                 </button>
                                                 {currentUser.role === 'admin' ? (
-                                                    <button onClick={() => handleOpenEditInvoice(sale)} title="Edit Invoice"
+                                                    <button onClick={() => handleOpenEditDocument(sale, 'sale')} title="Edit Invoice"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                         <EditIcon className="w-3.5 h-3.5" />
                                                     </button>
@@ -909,6 +1081,10 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
                                                     <DocumentTextIcon className="w-3.5 h-3.5" />
                                                 </button>
+                                                <button onClick={() => handleOpenEditDocument(quote, 'quotation')} title="Edit Quotation"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
+                                                    <EditIcon className="w-3.5 h-3.5" />
+                                                </button>
                                                 <button onClick={() => handleConvertQuoteToSale(quote)} title="Convert to Order Invoice"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
                                                     <BanknotesIcon className="w-3.5 h-3.5" />
@@ -980,55 +1156,103 @@ const SalesView: React.FC<SalesViewProps> = ({
                 )}
             </div>
 
-            {/* Admin Edit Invoice Modal - Powerful Inline Editor */}
-            <Modal isOpen={isEditInvoiceModalOpen} onClose={() => setIsEditInvoiceModalOpen(false)} title="Administrative Invoice Editor">
+            {/* Document Editor Modal (Invoices & Quotations) */}
+            <Modal isOpen={isEditInvoiceModalOpen} onClose={() => setIsEditInvoiceModalOpen(false)} title={`Modify ${editingDocType === 'sale' ? 'Invoice' : 'Quotation'} Record`}>
                 <div className="space-y-6">
-                    <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center gap-3">
-                        <div className="p-2 bg-orange-400 rounded-xl text-white shadow-sm"><EditIcon className="w-5 h-5" /></div>
-                        <div>
-                            <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest leading-none mb-1">Administrative Overide</p>
-                            <p className="text-xs font-bold text-orange-600">Modifying Invoice: <strong className="text-gray-900">#{saleToEdit?.id.substring(0, 8).toUpperCase()}</strong></p>
+                    <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-orange-400 rounded-xl text-white shadow-sm"><EditIcon className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest leading-none mb-1">Editing Mode</p>
+                                <p className="text-xs font-bold text-orange-600">Modifying {editingDocType === 'sale' ? 'Invoice' : 'Quotation'}: <strong className="text-gray-900">#{docToEdit?.id.substring(0, 8).toUpperCase()}</strong></p>
+                            </div>
                         </div>
+                        <button
+                            type="button"
+                            onClick={handleAddNewItemToEdit}
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all active:scale-95"
+                        >
+                            <PlusIcon className="w-3.5 h-3.5" /> Add Line Item
+                        </button>
                     </div>
 
                     <div className="space-y-4">
-                        <div className="overflow-hidden border border-gray-100 rounded-[1.8rem] shadow-sm bg-white">
+                        <div className="overflow-x-auto border border-gray-100 rounded-[1.8rem] shadow-sm bg-white">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 text-[9px] font-black text-gray-400 uppercase tracking-widest">
                                     <tr>
-                                        <th className="px-5 py-4">Item Name</th>
-                                        <th className="px-5 py-4 w-20 text-center">Qty</th>
-                                        <th className="px-5 py-4 w-32 text-right">Unit Price</th>
-                                        <th className="px-5 py-4 w-12"></th>
+                                        <th className="px-4 py-4">Item Name / Description</th>
+                                        <th className="px-2 py-4 w-20 text-center">Qty</th>
+                                        <th className="px-2 py-4 w-28 text-right">Unit Cost</th>
+                                        <th className="px-2 py-4 w-28 text-right">Total Amount</th>
+                                        <th className="px-2 py-4 w-10 text-center"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {editedItems.map((item, idx) => (
-                                        <tr key={idx} className="group hover:bg-gray-50/50">
-                                            <td className="px-5 py-4">
-                                                <p className="font-black text-gray-900 text-xs uppercase tracking-tight leading-tight">{item.name}</p>
-                                            </td>
-                                            <td className="px-2 py-4">
-                                                <input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleUpdateItemInEdit(idx, 'quantity', parseInt(e.target.value) || 1)}
-                                                    className="w-16 mx-auto text-center p-2 rounded-xl bg-gray-50 border-gray-100 font-black text-xs text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none"
-                                                />
-                                            </td>
-                                            <td className="px-2 py-4">
-                                                <input
-                                                    type="number"
-                                                    value={item.price}
-                                                    onChange={(e) => handleUpdateItemInEdit(idx, 'price', parseInt(e.target.value) || 0)}
-                                                    className="w-28 ml-auto text-right p-2 rounded-xl bg-gray-50 border-gray-100 font-black text-xs text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-4 text-center">
-                                                <button onClick={() => handleRemoveItemInEdit(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><TrashIcon className="w-4 h-4" /></button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {editedItems.map((item, idx) => {
+                                        const lineTotal = item.price * item.quantity;
+                                        return (
+                                            <tr key={idx} className="group hover:bg-gray-50/50">
+                                                <td className="px-4 py-3">
+                                                    <div className="space-y-1.5">
+                                                        <input
+                                                            type="text"
+                                                            value={item.name}
+                                                            onChange={(e) => handleUpdateItemName(idx, e.target.value)}
+                                                            placeholder="e.g. Sticker for the door"
+                                                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-amber-400 outline-none"
+                                                        />
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenMiniCalc(idx)}
+                                                                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-[10px] uppercase tracking-wider rounded-lg border border-purple-200 flex items-center gap-1 transition-all active:scale-95"
+                                                            >
+                                                                📐 Mini Calc Dimensions
+                                                            </button>
+                                                            {item.metadata?.type && (
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                    ({item.metadata.type})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-2 py-3">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleUpdateItemQuantity(idx, parseInt(e.target.value) || 1)}
+                                                        className="w-16 mx-auto text-center p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-3">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={Math.round(item.price)}
+                                                        onChange={(e) => handleUpdateItemUnitPrice(idx, parseFloat(e.target.value) || 0)}
+                                                        className="w-24 ml-auto text-right p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-3">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={Math.round(lineTotal)}
+                                                        onChange={(e) => handleUpdateItemTotalAmount(idx, parseFloat(e.target.value) || 0)}
+                                                        className="w-24 ml-auto text-right p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-3 text-center">
+                                                    <button onClick={() => handleRemoveItemInEdit(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -1046,28 +1270,234 @@ const SalesView: React.FC<SalesViewProps> = ({
                             <div className="bg-[#1A2232] p-4 rounded-2xl text-right">
                                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">New Total Payable</p>
                                 <p className="text-xl font-black text-yellow-400 tracking-tighter">
-                                    {formatUGX(editedItems.reduce((s, i) => s + (i.price * i.quantity), 0) - editedDiscount)}
+                                    {formatUGX(Math.max(0, editedItems.reduce((s, i) => s + (i.price * i.quantity), 0) - editedDiscount))}
                                 </p>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Job Narration / Admin Notes</label>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Notes / Narration</label>
                             <textarea
                                 value={editedNarration}
                                 onChange={(e) => setEditedNarration(e.target.value)}
-                                className="w-full p-4 border border-gray-100 rounded-[1.5rem] bg-gray-50 text-xs font-bold text-gray-700 min-h-[100px] resize-none outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all"
-                                placeholder="Internal production updates..."
+                                className="w-full p-4 border border-gray-100 rounded-[1.5rem] bg-gray-50 text-xs font-bold text-gray-700 min-h-[90px] resize-none outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all"
+                                placeholder="Internal production details..."
                             />
                         </div>
                     </div>
 
                     <button
                         onClick={handleSaveInvoiceEdit}
-                        className="w-full bg-blue-600 text-white py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-blue-700 active:scale-95 transition-all border border-blue-500/20"
+                        className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-black active:scale-95 transition-all border border-yellow-400/20"
                     >
-                        Update Invoice Contents
+                        Update {editingDocType === 'sale' ? 'Invoice' : 'Quotation'} Record
                     </button>
+                </div>
+            </Modal>
+
+            {/* Mini Dimension Calculator Pop-Up Modal */}
+            <Modal isOpen={isMiniCalcOpen} onClose={() => setIsMiniCalcOpen(false)} title="Mini Dimension Calculator">
+                <div className="space-y-5">
+                    <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl">
+                        <p className="text-[10px] font-black text-purple-800 uppercase tracking-widest leading-none mb-1">Recalculate Dimensions</p>
+                        <p className="text-xs font-bold text-purple-700">
+                            Editing Line Item #{miniCalcIndex !== null ? miniCalcIndex + 1 : ''}
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Stock Material Selection */}
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Select Material / Roll</label>
+                            <select
+                                value={mcStockItem}
+                                onChange={(e) => setMcStockItem(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-xs text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none"
+                            >
+                                <option value="">Select Stock Material...</option>
+                                {stockItems.map(s => (
+                                    <option key={s.skuId} value={s.skuId}>
+                                        {s.itemName} (Roll: {s.rollWidthMeters}m)
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Length & Width */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Length</label>
+                                <div className="flex gap-1">
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={mcLength || ''}
+                                        onChange={(e) => setMcLength(parseFloat(e.target.value) || 0)}
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none"
+                                        placeholder="Length"
+                                    />
+                                    <select
+                                        value={mcLengthUnit}
+                                        onChange={(e) => setMcLengthUnit(e.target.value as any)}
+                                        className="p-3 bg-gray-100 border border-gray-200 rounded-xl text-xs font-black text-purple-700 outline-none"
+                                    >
+                                        <option value="m">m</option>
+                                        <option value="cm">cm</option>
+                                        <option value="mm">mm</option>
+                                        <option value="in">in</option>
+                                        <option value="ft">ft</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Width</label>
+                                <div className="flex gap-1">
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={mcWidth || ''}
+                                        onChange={(e) => setMcWidth(parseFloat(e.target.value) || 0)}
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none"
+                                        placeholder="Width"
+                                    />
+                                    <select
+                                        value={mcWidthUnit}
+                                        onChange={(e) => setMcWidthUnit(e.target.value as any)}
+                                        className="p-3 bg-gray-100 border border-gray-200 rounded-xl text-xs font-black text-purple-700 outline-none"
+                                    >
+                                        <option value="m">m</option>
+                                        <option value="cm">cm</option>
+                                        <option value="mm">mm</option>
+                                        <option value="in">in</option>
+                                        <option value="ft">ft</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div>
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Standard Paper Size Presets</span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {Object.keys(PAPER_SIZES).map(sizeKey => (
+                                    <button
+                                        key={sizeKey}
+                                        type="button"
+                                        onClick={() => {
+                                            const size = PAPER_SIZES[sizeKey];
+                                            if (size) {
+                                                setMcWidth(size.width);
+                                                setMcWidthUnit('cm');
+                                                setMcLength(size.height);
+                                                setMcLengthUnit('cm');
+                                            }
+                                        }}
+                                        className="px-2.5 py-1 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-800 rounded-lg text-xs font-black transition-all"
+                                    >
+                                        {sizeKey}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Calculated Area badge */}
+                        <div className="bg-purple-50/70 p-3 rounded-xl flex justify-between items-center text-xs font-bold text-purple-900">
+                            <span>Calculated Area:</span>
+                            <span className="font-black text-purple-800">
+                                {mcLengthInMeters.toFixed(2)}m × {mcWidthInMeters.toFixed(2)}m = {(mcLengthInMeters * mcWidthInMeters).toFixed(3)} m²
+                            </span>
+                        </div>
+
+                        {/* Pricing Tier / Negotiated Rate */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Pricing Tier</label>
+                                <select
+                                    value={mcTier}
+                                    onChange={(e) => setMcTier(e.target.value)}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none"
+                                >
+                                    <option value="">Custom Negotiated Price</option>
+                                    {mcTiersForStock.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name} ({formatUGX(t.value)})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Base Price (UGX)</label>
+                                <input
+                                    type="number"
+                                    value={mcCalculatedBasePrice || ''}
+                                    onChange={(e) => setMcNegotiatedPrice(parseFloat(e.target.value) || 0)}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-900 outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Quantity & Extra Fees */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Quantity (Pcs)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={mcQuantity}
+                                    onChange={(e) => setMcQuantity(parseInt(e.target.value) || 1)}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-blue-700 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Extra Fee / Finishing (UGX)</label>
+                                <input
+                                    type="number"
+                                    value={mcExtraAmount || ''}
+                                    onChange={(e) => setMcExtraAmount(parseFloat(e.target.value) || 0)}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-900 outline-none"
+                                    placeholder="0"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Custom Item Description / Name */}
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Item Description / Custom Name</label>
+                            <input
+                                type="text"
+                                value={mcCustomName}
+                                onChange={(e) => setMcCustomName(e.target.value)}
+                                className="w-full p-3 bg-white border border-purple-200 rounded-xl font-bold text-xs text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none"
+                                placeholder="e.g. Sticker for the door"
+                            />
+                        </div>
+
+                        {/* Live Total Readout */}
+                        <div className="bg-[#1A2232] p-4 rounded-2xl flex justify-between items-center">
+                            <div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Unit Price: {formatUGX(mcEffectiveUnitPrice)}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Line Total</p>
+                                <p className="text-lg font-black text-yellow-400">{formatUGX(mcLineTotal)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsMiniCalcOpen(false)}
+                            className="flex-1 bg-gray-100 text-gray-600 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-gray-200 transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleApplyMiniCalc}
+                            className="flex-1 bg-purple-700 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-purple-800 transition-all shadow-xl active:scale-95"
+                        >
+                            Apply Mini Calc
+                        </button>
+                    </div>
                 </div>
             </Modal>
 

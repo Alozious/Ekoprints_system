@@ -17,6 +17,8 @@ interface SalesViewProps {
     quoteForSale: SaleItem[];
     quoteNarration?: string;
     quoteDiscount: number;
+    quoteRules: string[];
+    quoteTax: number;
     clearQuote: () => void;
     onAddSale: (saleData: Omit<Sale, 'id'>) => Promise<void>;
     onDeleteSale: (sale: Sale) => Promise<void>;
@@ -264,7 +266,7 @@ const SearchableMaterialSelect: React.FC<{
 };
 
 const SalesView: React.FC<SalesViewProps> = ({
-    sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, quoteRules, isQuotationMode, clearQuote,
+    sales, inventory, customers, currentUser, users, quoteForSale, quoteNarration, quoteDiscount, quoteRules, quoteTax, isQuotationMode, clearQuote,
     onAddSale, onDeleteSale, onUpdateSale, onAddCustomer, stockItems, pricingTiers, onStockOut, settings, quotations, onAddQuotation, onDeleteQuotation, onUpdateQuotation
 }) => {
     const [isAddSaleOpen, setIsAddSaleOpen] = useState(false);
@@ -307,6 +309,7 @@ const SalesView: React.FC<SalesViewProps> = ({
 
     const [customerId, setCustomerId] = useState('');
     const [amountPaid, setAmountPaid] = useState(0);
+    const [taxPercentInput, setTaxPercentInput] = useState<number | ''>('');
     const [paymentAmount, setPaymentAmount] = useState(0);
     const [paymentNote, setPaymentNote] = useState('');
 
@@ -336,7 +339,9 @@ const SalesView: React.FC<SalesViewProps> = ({
     }, [quoteForSale]);
 
     const subtotalQuote = useMemo(() => quoteForSale.reduce((sum, item) => sum + item.price * item.quantity, 0), [quoteForSale]);
-    const totalQuote = subtotalQuote - quoteDiscount;
+    const effectiveTax = convertingQuote ? (convertingQuote.taxPercent || 0) : (taxPercentInput === '' ? quoteTax : taxPercentInput);
+    const taxAmount = subtotalQuote > 0 ? ((subtotalQuote - (convertingQuote ? convertingQuote.discount : quoteDiscount)) * effectiveTax / 100) : 0;
+    const totalQuote = subtotalQuote - (convertingQuote ? convertingQuote.discount : quoteDiscount) + taxAmount;
 
     const handleCreateSale = async () => {
         if (!customerId) return;
@@ -346,6 +351,7 @@ const SalesView: React.FC<SalesViewProps> = ({
             customerId,
             subtotal: convertingQuote ? convertingQuote.subtotal : subtotalQuote,
             discount: convertingQuote ? convertingQuote.discount : quoteDiscount,
+            taxPercent: effectiveTax,
             total: convertingQuote ? convertingQuote.total : totalQuote,
             amountPaid,
             status: amountPaid >= (convertingQuote ? convertingQuote.total : totalQuote) ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid',
@@ -381,6 +387,7 @@ const SalesView: React.FC<SalesViewProps> = ({
             customerId,
             subtotal: subtotalQuote,
             discount: quoteDiscount,
+            taxPercent: taxPercentInput === '' ? quoteTax : taxPercentInput,
             total: totalQuote,
             userId: currentUser.id,
             userName: currentUser.username,
@@ -1626,6 +1633,26 @@ const SalesView: React.FC<SalesViewProps> = ({
                                     <span>-{formatUGX(convertingQuote ? convertingQuote.discount : quoteDiscount)}</span>
                                 </div>
                             )}
+                            <div className="flex items-center gap-3 py-2">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tax (%)</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={convertingQuote ? (convertingQuote.taxPercent || '') : taxPercentInput}
+                                    onChange={e => {
+                                        const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
+                                        setTaxPercentInput(val);
+                                    }}
+                                    disabled={!!convertingQuote}
+                                    className="w-24 px-3 py-1.5 border-2 border-gray-100 rounded-xl bg-white text-gray-900 font-black text-xs focus:ring-2 focus:ring-purple-400/20 focus:border-purple-400 outline-none transition-all text-center"
+                                    placeholder="N/A"
+                                />
+                                <span className="text-[10px] font-bold text-purple-500">
+                                    {effectiveTax > 0 ? `${effectiveTax}%` : 'N/A'}
+                                </span>
+                            </div>
                             <div className="flex justify-between items-baseline pt-2">
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Final Payable</span>
                                 <span className="text-3xl font-black text-blue-900 tracking-tighter">{formatUGX(convertingQuote ? convertingQuote.total : totalQuote)}</span>

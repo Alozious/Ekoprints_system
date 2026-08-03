@@ -175,8 +175,9 @@ const App: React.FC = () => {
 
     const createDocument = useCallback(async (collectionName: string, data: any, stateSetter: React.Dispatch<any>, successMessage: string) => {
         const operation = async () => {
-            const docRef = await addDoc(collection(db, collectionName), data);
-            const newDoc = { id: docRef.id, ...data };
+            const { id, ...cleanData } = data;
+            const docRef = await addDoc(collection(db, collectionName), cleanData);
+            const newDoc = { ...cleanData, id: docRef.id };
             stateSetter((prev: any[]) => [newDoc, ...prev]);
             return newDoc;
         };
@@ -184,7 +185,7 @@ const App: React.FC = () => {
     }, [runAsyncOperation]);
 
     const updateDocument = useCallback(async (collectionName: string, id: string, data: any, stateSetter: React.Dispatch<any>, successMessage: string) => {
-        const operation = updateDoc(doc(db, collectionName, id), data).then(() => {
+        const operation = setDoc(doc(db, collectionName, id), data, { merge: true }).then(() => {
             stateSetter((prev: any[]) => prev.map(item => item.id === id ? { ...item, ...data } : item));
         });
         return runAsyncOperation<void>(operation, successMessage);

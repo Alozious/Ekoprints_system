@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, SystemSettings, Quotation } from '../types';
-import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon } from './icons';
+import { ChevronDownIcon, SearchIcon, PlusIcon, TrashIcon, EditIcon, DocumentTextIcon, BanknotesIcon, BeakerIcon, CopyIcon } from './icons';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
 import Invoice from './Invoice';
@@ -287,6 +287,7 @@ const SalesView: React.FC<SalesViewProps> = ({
     const [editedItems, setEditedItems] = useState<SaleItem[]>([]);
     const [editedDiscount, setEditedDiscount] = useState(0);
     const [editedNarration, setEditedNarration] = useState('');
+    const [editedCareOf, setEditedCareOf] = useState('');
 
     // Mini Dimension Calculator State
     const [isMiniCalcOpen, setIsMiniCalcOpen] = useState(false);
@@ -453,7 +454,22 @@ const SalesView: React.FC<SalesViewProps> = ({
         setEditedItems(doc.items.map(item => ({ ...item })));
         setEditedDiscount(doc.discount || 0);
         setEditedNarration(doc.notes || '');
+        setEditedCareOf(doc.careOf || (doc as any).customer?.careOf || '');
         setIsEditInvoiceModalOpen(true);
+    };
+
+    const handleDuplicateQuotation = async (quote: Quotation) => {
+        const { id, ...quoteWithoutId } = quote;
+        const newQuoteData: Omit<Quotation, 'id'> = {
+            ...quoteWithoutId,
+            date: new Date().toISOString(),
+            items: quote.items.map(item => ({ ...item })),
+            rules: quote.rules ? [...quote.rules] : [],
+            isDuplicate: true
+        };
+        if (onAddQuotation) {
+            await onAddQuotation(newQuoteData);
+        }
     };
 
     const handleUpdateItemName = (index: number, name: string) => {
@@ -604,7 +620,8 @@ const SalesView: React.FC<SalesViewProps> = ({
                 discount: editedDiscount,
                 total: newTotal,
                 status: newStatus,
-                notes: editedNarration
+                notes: editedNarration,
+                careOf: editedCareOf
             };
 
             await onUpdateSale(updatedSale);
@@ -617,7 +634,8 @@ const SalesView: React.FC<SalesViewProps> = ({
                 subtotal: newSubtotal,
                 discount: editedDiscount,
                 total: newTotal,
-                notes: editedNarration
+                notes: editedNarration,
+                careOf: editedCareOf
             };
 
             if (onUpdateQuotation) {
@@ -1046,12 +1064,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                     <table className="w-full text-left table-fixed">
                         <thead className="bg-gray-50 text-gray-400 uppercase font-black text-[9px] tracking-[0.12em]">
                             <tr>
-                                <th className="px-4 py-3 w-[15%]">Ref</th>
-                                <th className="px-4 py-3 w-[25%]">Client</th>
-                                <th className="px-4 py-3 w-[20%]">Date</th>
-                                <th className="px-4 py-3 w-[15%] text-right">Value</th>
-                                <th className="px-4 py-3 w-[10%] text-center">Rules</th>
-                                <th className="px-4 py-3 w-[15%]">Actions</th>
+                                <th className="px-4 py-3 w-[14%]">Ref</th>
+                                <th className="px-4 py-3 w-[22%]">Client</th>
+                                <th className="px-4 py-3 w-[18%]">C/O</th>
+                                <th className="px-4 py-3 w-[16%]">Date</th>
+                                <th className="px-4 py-3 w-[13%] text-right">Value</th>
+                                <th className="px-4 py-3 w-[6%] text-center">Rules</th>
+                                <th className="px-4 py-3 w-[11%]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -1060,13 +1079,23 @@ const SalesView: React.FC<SalesViewProps> = ({
                                 return (
                                     <tr key={quote.id} className="hover:bg-gray-50/50 transition-colors group">
                                         <td className="px-4 py-2 font-mono font-bold text-yellow-600 text-[10px] truncate">
-                                            #{quote.id.substring(0, 7).toUpperCase()}
+                                            <div className="flex items-center gap-1">
+                                                <span>#{quote.id.substring(0, 7).toUpperCase()}</span>
+                                                {quote.isDuplicate && (
+                                                    <span className="bg-[#1A2232] text-yellow-400 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-tight" title="Duplicated Quotation">
+                                                        DUP
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-2">
                                             <p className="font-bold text-gray-900 text-[11px] uppercase truncate">{customer?.name || 'Guest'}</p>
                                             <p className="text-[9px] text-gray-400 font-medium truncate">
                                                 {customer?.phone || '—'}
                                             </p>
+                                        </td>
+                                        <td className="px-4 py-2 font-bold text-gray-700 text-[10px] uppercase truncate">
+                                            {quote.careOf || customer?.careOf || '—'}
                                         </td>
                                         <td className="px-4 py-2 text-gray-600 font-medium text-[10px]">
                                             {new Date(quote.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' })}
@@ -1092,6 +1121,10 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                     <EditIcon className="w-3.5 h-3.5" />
                                                 </button>
+                                                <button onClick={() => handleDuplicateQuotation(quote)} title="Duplicate Quotation"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all active:scale-90">
+                                                    <CopyIcon className="w-3.5 h-3.5" />
+                                                </button>
                                                 <button onClick={() => handleConvertQuoteToSale(quote)} title="Convert to Order Invoice"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
                                                     <BanknotesIcon className="w-3.5 h-3.5" />
@@ -1107,7 +1140,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                             })}
                             {filteredQuotations.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
+                                    <td colSpan={7} className="px-8 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">
                                         No quotations found
                                     </td>
                                 </tr>
@@ -1183,85 +1216,100 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </button>
                     </div>
 
+                    <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Care Of (C/O)</label>
+                        <input
+                            type="text"
+                            value={editedCareOf}
+                            onChange={(e) => setEditedCareOf(e.target.value)}
+                            placeholder="e.g. Mr. John Doe / Department X"
+                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-amber-400 outline-none transition-all"
+                        />
+                    </div>
+
                     <div className="space-y-4">
-                        <div className="overflow-x-auto border border-gray-100 rounded-[1.8rem] shadow-sm bg-white">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                    <tr>
-                                        <th className="px-4 py-4">Item Name / Description</th>
-                                        <th className="px-2 py-4 w-20 text-center">Qty</th>
-                                        <th className="px-2 py-4 w-28 text-right">Unit Cost</th>
-                                        <th className="px-2 py-4 w-28 text-right">Total Amount</th>
-                                        <th className="px-2 py-4 w-10 text-center"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {editedItems.map((item, idx) => {
-                                        const lineTotal = item.price * item.quantity;
-                                        return (
-                                            <tr key={idx} className="group hover:bg-gray-50/50">
-                                                <td className="px-4 py-3">
-                                                    <div className="space-y-1.5">
-                                                        <input
-                                                            type="text"
-                                                            value={item.name}
-                                                            onChange={(e) => handleUpdateItemName(idx, e.target.value)}
-                                                            placeholder="e.g. Sticker for the door"
-                                                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-amber-400 outline-none"
-                                                        />
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleOpenMiniCalc(idx)}
-                                                                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-[10px] uppercase tracking-wider rounded-lg border border-purple-200 flex items-center gap-1 transition-all active:scale-95"
-                                                            >
-                                                                📐 Mini Calc Dimensions
-                                                            </button>
-                                                            {item.metadata?.type && (
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                                                                    ({item.metadata.type})
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-2 py-3">
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Line Items ({editedItems.length})</span>
+                            </div>
+                            {editedItems.map((item, idx) => {
+                                const lineTotal = item.price * item.quantity;
+                                return (
+                                    <div key={idx} className="p-3.5 bg-gray-50/80 border border-gray-200 rounded-2xl space-y-2.5 transition-all hover:bg-white hover:border-gray-300 shadow-sm">
+                                        {/* Row 1: Item Name / Description + Remove button */}
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => handleUpdateItemName(idx, e.target.value)}
+                                                placeholder="Item Description"
+                                                className="flex-1 p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-amber-400 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveItemInEdit(idx)}
+                                                className="p-2.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-95 flex-shrink-0"
+                                                title="Remove Item"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {/* Row 2: Mini Calc + Qty + Unit Cost + Total */}
+                                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-200/60">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenMiniCalc(idx)}
+                                                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-[10px] uppercase tracking-wider rounded-xl border border-purple-200 flex items-center gap-1 transition-all active:scale-95"
+                                                >
+                                                    📐 Mini Calc
+                                                </button>
+                                                {item.metadata?.type && (
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        ({item.metadata.type})
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Qty:</span>
                                                     <input
                                                         type="number"
                                                         min="1"
                                                         value={item.quantity}
                                                         onChange={(e) => handleUpdateItemQuantity(idx, parseInt(e.target.value) || 1)}
-                                                        className="w-16 mx-auto text-center p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none"
+                                                        className="w-16 text-center p-1.5 rounded-xl bg-white border border-gray-200 font-black text-xs text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none"
                                                     />
-                                                </td>
-                                                <td className="px-2 py-3">
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Unit:</span>
                                                     <input
                                                         type="number"
                                                         min="0"
                                                         value={Math.round(item.price)}
                                                         onChange={(e) => handleUpdateItemUnitPrice(idx, parseFloat(e.target.value) || 0)}
-                                                        className="w-24 ml-auto text-right p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none"
+                                                        className="w-24 text-right p-1.5 rounded-xl bg-white border border-gray-200 font-black text-xs text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none"
                                                     />
-                                                </td>
-                                                <td className="px-2 py-3">
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Total:</span>
                                                     <input
                                                         type="number"
                                                         min="0"
                                                         value={Math.round(lineTotal)}
                                                         onChange={(e) => handleUpdateItemTotalAmount(idx, parseFloat(e.target.value) || 0)}
-                                                        className="w-24 ml-auto text-right p-2 rounded-xl bg-gray-50 border border-gray-200 font-black text-xs text-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none"
+                                                        className="w-24 text-right p-1.5 rounded-xl bg-white border border-gray-200 font-black text-xs text-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none"
                                                     />
-                                                </td>
-                                                <td className="px-2 py-3 text-center">
-                                                    <button onClick={() => handleRemoveItemInEdit(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

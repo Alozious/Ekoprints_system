@@ -73,6 +73,7 @@ export interface Customer {
   email: string;
   phone: string;
   address: string;
+  careOf?: string;
   createdAt: string;
   totalSpent?: number;
   outstandingDebt?: number;
@@ -103,6 +104,7 @@ export interface Sale {
   usageLogged?: boolean;
   notes?: string;
   rules?: string[];
+  careOf?: string;
 }
 
 export interface Quotation {
@@ -118,6 +120,8 @@ export interface Quotation {
   userName?: string;
   notes?: string;
   rules?: string[];
+  careOf?: string;
+  isDuplicate?: boolean;
 }
 
 export interface Expense {

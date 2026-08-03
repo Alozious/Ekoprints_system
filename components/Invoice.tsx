@@ -59,42 +59,36 @@ const invoiceStyles = (bgUrl: string) => `
   .inv-header-top {
     display: flex;
     align-items: flex-start;
-    gap: 0;
+    gap: 16px;
     margin-bottom: 24px;
   }
-  .inv-logo-wrap { flex-shrink: 0; padding-right: 24px; }
-  .inv-logo { height: 90px; width: auto; object-fit: contain; display: block; }
-  .inv-vdivider {
-    width: 2px;
-    align-self: stretch;
-    background: #cbd5e1;
-    border-radius: 2px;
-    flex-shrink: 0;
-  }
+  .inv-logo-wrap { flex-shrink: 0; padding-right: 0; }
+  .inv-logo { height: 85px; width: auto; object-fit: contain; display: block; }
+  .inv-vdivider { display: none; }
   .inv-contact-grid {
     display: flex;
     flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 0;
-    padding-left: 24px;
+    gap: 16px;
+    padding: 10px 16px;
     align-items: flex-start;
     flex: 1;
+    border: 2px solid #d946ef;
+    border-radius: 12px;
+    background: transparent;
   }
   .inv-contact-block {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    min-width: 180px;
+    gap: 8px;
   }
-  .inv-contact-icon {
-    width: 28px; height: 28px; border-radius: 50%;
-    background-color: #6d28d9; display: flex; align-items: center; justify-content: center;
-    color: #fff; flex-shrink: 0; margin-top: 2px;
-  }
-  .inv-contact-icon svg { width: 14px; height: 14px; }
-  .inv-contact-info { display: flex; flex-direction: column; }
-  .inv-contact-label { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.12em; color: #6d28d9; line-height: 1.4; }
-  .inv-contact-value { font-size: 14px; font-weight: 600; color: #374151; line-height: 1.4; }
+  .inv-contact-block.tel { flex: 0 0 auto; }
+  .inv-contact-block.email { flex: 0 0 auto; }
+  .inv-contact-block.location { flex: 1 1 auto; }
+  .inv-contact-info { display: flex; flex-direction: column; min-width: 0; }
+  .inv-contact-label { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #c026d3; line-height: 1.3; }
+  .inv-contact-value { font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.3; }
+  .inv-contact-value.email-val { white-space: nowrap; }
 
   /* ── BADGE ROW ── */
   .inv-badge-row {
@@ -138,9 +132,10 @@ const invoiceStyles = (bgUrl: string) => `
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: #6d28d9;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
-  .inv-client-name { font-size: 26px; font-weight: 900; color: #111827; margin-bottom: 25px; }
+  .inv-client-name { font-size: 24px; font-weight: 900; color: #111827; margin-bottom: 4px; }
+  .inv-client-details { font-size: 13px; font-weight: 500; color: #4b5563; line-height: 1.5; margin-bottom: 20px; }
 
   /* ── TABLE ── */
   .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
@@ -321,35 +316,25 @@ function buildPrintHtml(params: {
 <div class="inv-page">
   <div class="inv-bg"></div>
   <div class="inv-body">
-    <!-- HEADER TOP: Logo | divider | contacts -->
+    <!-- HEADER TOP: Logo | contacts -->
     <div class="inv-header-top">
       <div class="inv-logo-wrap">
         <img src="${logoUrl}" class="inv-logo" alt="Logo"/>
       </div>
-      <div class="inv-vdivider"></div>
       <div class="inv-contact-grid">
-        <div class="inv-contact-block">
-          <div class="inv-contact-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 21 17z"/></svg>
-          </div>
+        <div class="inv-contact-block tel">
           <div class="inv-contact-info">
             <span class="inv-contact-label">Tel</span>
             ${settings.businessPhone.split('/').map((p: string) => `<span class="inv-contact-value">${p.trim()}</span>`).join('')}
           </div>
         </div>
-        <div class="inv-contact-block">
-          <div class="inv-contact-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          </div>
+        <div class="inv-contact-block email">
           <div class="inv-contact-info">
             <span class="inv-contact-label">Email</span>
-            <span class="inv-contact-value">${settings.businessEmail}</span>
+            <span class="inv-contact-value email-val">${settings.businessEmail}</span>
           </div>
         </div>
-        <div class="inv-contact-block">
-          <div class="inv-contact-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
-          </div>
+        <div class="inv-contact-block location">
           <div class="inv-contact-info">
             <span class="inv-contact-label">Location</span>
             ${settings.businessLocation.split(',').reduce((acc: string[], part: string, i: number, arr: string[]) => {
@@ -376,7 +361,14 @@ function buildPrintHtml(params: {
 
     <!-- CLIENT -->
     <div class="inv-client-label">${isQuotation ? 'Prepared For' : 'Billed To'}</div>
-    <div class="inv-client-name">${sale.customer.name}${sale.customer.phone ? `<span style="font-size:14px;font-weight:500;color:#6b7280;margin-left:10px;">${sale.customer.phone}</span>` : ''}</div>
+    <div class="inv-client-name">${sale.customer.name}</div>
+    ${sale.customer.phone ? `<div style="font-size:13px;font-weight:600;color:#6b7280;margin-bottom:4px;">Tel: ${sale.customer.phone}</div>` : ''}
+    ${(sale.customer.address || sale.customer.careOf || (sale as any).careOf) ? `
+      <div class="inv-client-details">
+        ${sale.customer.address ? `<div><strong>Address:</strong> ${sale.customer.address}</div>` : ''}
+        ${(sale.customer.careOf || (sale as any).careOf) ? `<div><strong>C/O:</strong> ${sale.customer.careOf || (sale as any).careOf}</div>` : ''}
+      </div>
+    ` : '<div style="margin-bottom: 20px;"></div>'}
 
     <!-- TABLE -->
     <table class="inv-table">
@@ -400,9 +392,15 @@ function buildPrintHtml(params: {
       </tbody>
     </table>
 
-    <!-- LOWER: rules + totals -->
+    <!-- LOWER: rules + QR + totals -->
     <div class="inv-lower">
-      <div class="inv-rules">${rulesHtml}</div>
+      <div class="inv-rules-and-qr">
+        ${rulesHtml}
+        <div class="inv-qr-block">
+          <img src="${qrUrl}" class="inv-qr-img" alt="QR Code"/>
+          <span class="inv-qr-label">SCAN TO VERIFY</span>
+        </div>
+      </div>
       <div class="inv-totals">
         <div class="inv-total-row">
           <span class="inv-total-lbl">Subtotal</span>
@@ -416,23 +414,9 @@ function buildPrintHtml(params: {
           <span class="inv-total-val">${fmt(grandTotal)}</span>
         </div>
       </div>
-    `;
+    </div>
 
-    return `
-      <div class="inv-page">
-        <div class="inv-bg"></div>
-        <div class="inv-body">
-          <div class="inv-top-section">
-            ${headerHtml}
-          </div>
-          ${tableHtml}
-          ${bottomHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  <!-- FOOTER -->
+    <!-- FOOTER -->
     <div class="inv-footer">
       <div class="inv-footer-tagline">Thank you for choosing ${settings.businessName}!</div>
     </div>
@@ -593,17 +577,13 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
           <div className="inv-bg" />
           <div className="inv-body">
 
-            {/* HEADER TOP: Logo | divider | contacts */}
+            {/* HEADER TOP: Logo | contacts */}
             <div className="inv-header-top">
               <div className="inv-logo-wrap">
                 <img src={logoAsset} className="inv-logo" alt="Logo" />
               </div>
-              <div className="inv-vdivider" />
               <div className="inv-contact-grid">
-                <div className="inv-contact-block">
-                  <div className="inv-contact-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 21 17z"/></svg>
-                  </div>
+                <div className="inv-contact-block tel">
                   <div className="inv-contact-info">
                     <span className="inv-contact-label">Tel</span>
                     {settings.businessPhone.split('/').map((p, i) => (
@@ -611,19 +591,13 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
                     ))}
                   </div>
                 </div>
-                <div className="inv-contact-block">
-                  <div className="inv-contact-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  </div>
+                <div className="inv-contact-block email">
                   <div className="inv-contact-info">
                     <span className="inv-contact-label">Email</span>
-                    <span className="inv-contact-value">{settings.businessEmail}</span>
+                    <span className="inv-contact-value email-val">{settings.businessEmail}</span>
                   </div>
                 </div>
-                <div className="inv-contact-block">
-                  <div className="inv-contact-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
-                  </div>
+                <div className="inv-contact-block location">
                   <div className="inv-contact-info">
                     <span className="inv-contact-label">Location</span>
                     {settings.businessLocation.split(',').reduce((acc: string[], part, i) => {
@@ -648,15 +622,26 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
               </div>
             </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 25 }}>
-                        <div>
-                          <span className={badgeClass}>{badgeLabel}</span>
-                        </div>
-                        <div className="inv-meta">
-                          <div className="inv-ref">{refPrefix}-#{sale.id.substring(0, 8).toUpperCase()}</div>
-                          <div className="inv-date">Date: {new Date(sale.date).toLocaleDateString()}</div>
-                        </div>
-                      </div>
+            <hr className="inv-divider" />
+
+            {/* CLIENT */}
+            <div className="inv-client-label">{isQuotation ? 'Prepared For' : 'Billed To'}</div>
+            <div className="inv-client-name font-black text-2xl text-gray-900 mb-0.5">
+              {sale.customer.name}
+            </div>
+            {sale.customer.phone && (
+              <div className="text-xs font-semibold text-gray-500 mb-1">
+                Tel: {sale.customer.phone}
+              </div>
+            )}
+            {(sale.customer.address || sale.customer.careOf || (sale as any).careOf) ? (
+              <div className="inv-client-details text-xs font-semibold text-gray-600 mb-5 flex flex-col gap-0.5">
+                {sale.customer.address && <div><span className="font-bold text-gray-700">Address:</span> {sale.customer.address}</div>}
+                {(sale.customer.careOf || (sale as any).careOf) && <div><span className="font-bold text-gray-700">C/O:</span> {sale.customer.careOf || (sale as any).careOf}</div>}
+              </div>
+            ) : (
+              <div style={{ marginBottom: 20 }}></div>
+            )}
 
             {/* TABLE */}
             <table className="inv-table">
@@ -680,15 +665,19 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
               </tbody>
             </table>
 
-            {/* LOWER: rules + totals */}
+            {/* LOWER: rules + QR + totals */}
             <div className="inv-lower">
-              <div className="inv-rules">
+              <div className="inv-rules-and-qr">
                 {sale.rules && sale.rules.length > 0 && (
-                  <>
+                  <div className="inv-rules">
                     <div className="inv-rules-label">Invoice Terms &amp; Rules</div>
                     <ul>{sale.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
-                  </>
+                  </div>
                 )}
+                <div className="inv-qr-block">
+                  <img src={qrCodeUrl} className="inv-qr-img" alt="QR Code" />
+                  <span className="inv-qr-label">SCAN TO VERIFY</span>
+                </div>
               </div>
               <div className="inv-totals">
                 <div className="inv-total-row">

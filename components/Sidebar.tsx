@@ -38,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
         { name: 'Inventory', icon: InventoryIcon },
         { name: 'Expenses', icon: ExpensesIcon },
         { name: 'Customers', icon: CustomersIcon },
+        { name: 'Marketing', icon: CustomersIcon },
         { name: 'Reports', icon: ReportsIcon },
         { name: 'Users', icon: UsersIcon },
         { name: 'Settings', icon: CogIcon },

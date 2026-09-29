@@ -2,12 +2,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Customer, Sale, SystemSettings } from '../types';
 import Modal from './Modal';
+import CustomerImportModal from './CustomerImportModal';
+import { cleanPhones, splitContacts, CustomerWrite } from '../customerImport';
+import PhoneCleanupModal from './PhoneCleanupModal';
+import CustomerContactsInput from './CustomerContactsInput';
+import CustomerNamesModal from './CustomerNamesModal';
 import ConfirmationModal from './ConfirmationModal';
 import Invoice from './Invoice';
 import { PlusIcon, DocumentTextIcon, PrintIcon, EditIcon, TrashIcon, SearchIcon } from './icons';
 import { useToast } from '../App';
 
 interface CustomersViewProps {
+    onImportCustomers: (rows: CustomerWrite[]) => Promise<void>;
     customers: Customer[];
     sales: Sale[];
     onAddCustomer: (customerData: Omit<Customer, 'id' | 'createdAt'>) => Promise<void | Customer>;
@@ -37,7 +43,9 @@ const EditCustomerModal: React.FC<{
                 name: customer.name,
                 email: customer.email,
                 phone: customer.phone,
-                address: customer.address
+                address: customer.address,
+                category: customer.category || '',
+                district: customer.district || ''
             });
         }
     }, [customer]);
@@ -49,7 +57,9 @@ const EditCustomerModal: React.FC<{
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onUpdateCustomer(customer.id, formData);
+        const phone = cleanPhones(formData.phone);
+        if (phone === null) { alert('Enter a valid Ugandan phone number, such as +256700123456.'); return; }
+        await onUpdateCustomer(customer.id, { ...formData, phone });
         onClose();
     };
 
@@ -69,12 +79,15 @@ const EditCustomerModal: React.FC<{
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Contact</label>
-                        <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={darkInput} />
+                        <CustomerContactsInput value={formData.phone} onChange={phone => setFormData({ ...formData, phone })} />
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Physical Address</label>
                         <input type="text" name="address" value={formData.address} onChange={handleChange} className={darkInput} />
                     </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    {(['category', 'district'] as const).map(field => <label className="text-sm capitalize" key={field}>{field}<input aria-label={`Customer ${field}`} value={formData[field] || ''} onChange={e => setFormData({ ...formData, [field]: e.target.value })} className={darkInput} /></label>)}
                 </div>
                 <div className="pt-4">
                     <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all border border-yellow-400/20">Save Profile Updates</button>
@@ -84,7 +97,10 @@ const EditCustomerModal: React.FC<{
     );
 };
 
-const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCustomer, onUpdateCustomer, onDeleteCustomer, settings }) => {
+const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCustomer, onImportCustomers, onUpdateCustomer, onDeleteCustomer, settings }) => {
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isCleanupOpen, setIsCleanupOpen] = useState(false);
+    const [isNamesOpen, setIsNamesOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -134,7 +150,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 const isMatch = customer.name.toLowerCase().includes(lowerCaseQuery) ||
                     customer.email.toLowerCase().includes(lowerCaseQuery) ||
                     customer.phone.toLowerCase().includes(lowerCaseQuery) ||
-                    customer.address.toLowerCase().includes(lowerCaseQuery);
+                    customer.address.toLowerCase().includes(lowerCaseQuery) ||
+                    (customer.category || '').toLowerCase().includes(lowerCaseQuery) ||
+                    (customer.district || '').toLowerCase().includes(lowerCaseQuery);
                 if (!isMatch) return false;
             }
 
@@ -189,7 +207,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
 
     const handleAddCustomer = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onAddCustomer(newCustomer);
+        const phone = cleanPhones(newCustomer.phone);
+        if (phone === null) { addToast('Enter a valid Ugandan phone number, such as +256700123456.', 'error'); return; }
+        await onAddCustomer({ ...newCustomer, phone });
         setNewCustomer({ name: '', email: '', phone: '', address: '' });
         setIsAddModalOpen(false);
     };
@@ -384,7 +404,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
         let rows: string[][] = [];
 
         if (includeHistory) {
-            rows.push(["CustomerID", "CustomerName", "CustomerEmail", "CustomerPhone", "CustomerAddress", "RegisteredOn", "SaleID", "SaleDate", "SaleTotal", "AmountPaid", "Debt"]);
+            rows.push(["CustomerID", "CustomerName", "CustomerEmail", "CustomerPhone", "CustomerAddress", "Category", "District", "RegisteredOn", "SaleID", "SaleDate", "SaleTotal", "AmountPaid", "Debt"]);
             sales.forEach(sale => {
                 const customer = customersWithStats.find(c => c.id === sale.customerId);
                 if (customer) {
@@ -395,6 +415,8 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                         customer.email,
                         customer.phone,
                         `"${customer.address}"`,
+                        `"${(customer.category || '').replace(/"/g, '""')}"`,
+                        `"${(customer.district || '').replace(/"/g, '""')}"`,
                         new Date(customer.createdAt).toLocaleString(),
                         sale.id,
                         new Date(sale.date).toLocaleDateString(),
@@ -405,7 +427,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 }
             });
         } else {
-            rows.push(["CustomerID", "Name", "Email", "Phone", "Address", "RegisteredOn", "TotalSpent", "OutstandingDebt"]);
+            rows.push(["CustomerID", "Name", "Email", "Phone", "Address", "Category", "District", "RegisteredOn", "TotalSpent", "OutstandingDebt"]);
             sortedCustomers.forEach(customer => {
                 rows.push([
                     customer.id,
@@ -413,6 +435,8 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                     customer.email,
                     customer.phone,
                     `"${customer.address}"`,
+                    `"${(customer.category || '').replace(/"/g, '""')}"`,
+                    `"${(customer.district || '').replace(/"/g, '""')}"`,
                     new Date(customer.createdAt).toLocaleString(),
                     String(customer.totalSpent || 0),
                     String(customer.outstandingDebt || 0)
@@ -481,6 +505,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
 
     return (
         <div className="space-y-4">
+            {isImportOpen && <CustomerImportModal customers={customers} onClose={() => setIsImportOpen(false)} onImport={onImportCustomers} />}
+            {isNamesOpen && <CustomerNamesModal customers={customers} onClose={() => setIsNamesOpen(false)} onEdit={customer => { setIsNamesOpen(false); handleOpenEditModal(customer); }} />}
+            {isCleanupOpen && <PhoneCleanupModal customers={customers} onClose={() => setIsCleanupOpen(false)} onSave={onImportCustomers} />}
             {/* Merged header bar */}
             <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap mr-1">Customer Management</span>
@@ -530,6 +557,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 </label>
 
                 <div className="ml-auto flex items-center gap-2">
+                    <button onClick={() => setIsNamesOpen(true)} className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Check customer names</button>
+                    <button onClick={() => setIsCleanupOpen(true)} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Clean phone numbers</button>
+                    <button onClick={() => setIsImportOpen(true)} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 whitespace-nowrap">Import Excel</button>
                     <button onClick={handleExportCSV} className="flex items-center bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100">
                         <DocumentTextIcon className="w-3.5 h-3.5 mr-1" /> CSV
                     </button>
@@ -542,13 +572,15 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
-                <table className="w-full table-fixed text-left">
+            <div className="bg-white rounded-[2rem] shadow-xl overflow-x-auto border border-gray-100">
+                <table className="w-full min-w-[1100px] text-left">
                     <thead className="text-[9px] text-gray-400 uppercase bg-gray-50 font-black tracking-widest">
                         <tr>
                             <th className="px-4 py-3 w-[20%]">Name</th>
                             <th className="px-4 py-3 w-[18%]">Contact</th>
                             <th className="px-4 py-3 w-[18%]">Address</th>
+                            <th className="px-4 py-3">Category</th>
+                            <th className="px-4 py-3">District</th>
                             <th className="px-4 py-3 w-[12%]">Registered</th>
                             <th className="px-4 py-3 w-[14%] text-right">Total Spent</th>
                             <th className="px-4 py-3 w-[10%] text-right">Debt</th>
@@ -561,9 +593,11 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                                 <td className="px-4 py-2 text-[10px] font-black text-gray-900 uppercase truncate">{customer.name}</td>
                                 <td className="px-4 py-2">
                                     <div className="text-[10px] text-blue-600 font-bold truncate">{customer.email}</div>
-                                    <div className="text-[9px] text-gray-400 font-black uppercase truncate">{customer.phone}</div>
+                                    <div className="text-[9px] text-gray-500 font-bold">{splitContacts(customer.phone || "").map((phone, index) => <div key={index}>{phone}</div>)}</div>
                                 </td>
                                 <td className="px-4 py-2 text-[10px] font-bold text-gray-500 truncate">{customer.address}</td>
+                                <td className="px-4 py-2 text-[10px] font-bold text-gray-500">{customer.category || '—'}</td>
+                                <td className="px-4 py-2 text-[10px] font-bold text-gray-500">{customer.district || '—'}</td>
                                 <td className="px-4 py-2 text-[10px] text-gray-400 font-medium">{new Date(customer.createdAt).toLocaleDateString()}</td>
                                 <td className="px-4 py-2 text-right text-[10px] font-black text-gray-900">{formatUGX(customer.totalSpent || 0)}</td>
                                 <td className={`px-4 py-2 text-right text-[10px] font-black ${(customer.outstandingDebt || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -589,7 +623,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                         ))}
                         {sortedCustomers.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="px-4 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">No customers found</td>
+                                <td colSpan={9} className="px-4 py-16 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">No customers found</td>
                             </tr>
                         )}
                     </tbody>
@@ -625,6 +659,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
             {/* Add Customer Modal */}
             <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Register New Client">
                 <form onSubmit={handleAddCustomer} className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">{(['category', 'district'] as const).map(field => <label key={field} className="text-sm capitalize">{field}<input aria-label={`New customer ${field}`} value={newCustomer[field] || ''} onChange={e => setNewCustomer({ ...newCustomer, [field]: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3" /></label>)}</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="md:col-span-2 space-y-1.5">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Legal Name</label>
@@ -636,7 +671,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                         </div>
                         <div className="space-y-1.5">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Contact</label>
-                            <input type="tel" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="block w-full rounded-2xl bg-gray-800 border-none text-white font-bold py-4 px-6 shadow-xl focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500" placeholder="+256..." />
+                            <CustomerContactsInput value={newCustomer.phone} onChange={phone => setNewCustomer({ ...newCustomer, phone })} />
                         </div>
                         <div className="md:col-span-2 space-y-1.5">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Physical/Office Address</label>
@@ -668,9 +703,10 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
                                 <div><p className="text-[8px] font-black text-gray-400 uppercase">Registered Name</p><p className="text-sm font-black text-gray-900">{selectedCustomer.name}</p></div>
                                 <div><p className="text-[8px] font-black text-gray-400 uppercase">Account Email</p><p className="text-sm font-black text-blue-600">{selectedCustomer.email}</p></div>
-                                <div><p className="text-[8px] font-black text-gray-400 uppercase">Primary Phone</p><p className="text-sm font-black text-gray-900">{selectedCustomer.phone || 'N/A'}</p></div>
+                                <div><p className="text-[8px] font-black text-gray-400 uppercase">Phone Contacts</p><p className="text-sm font-black text-gray-900">{selectedCustomer.phone || 'N/A'}</p></div>
                                 <div><p className="text-[8px] font-black text-gray-400 uppercase">Enrolment Date</p><p className="text-sm font-black text-gray-900">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p></div>
                                 <div className="sm:col-span-2"><p className="text-[8px] font-black text-gray-400 uppercase">Known Location</p><p className="text-sm font-black text-gray-900">{selectedCustomer.address || 'No Address Recorded'}</p></div>
+                                {(['category', 'district'] as const).map(field => <div key={field}><p className="text-[8px] font-black text-gray-400 uppercase">{field}</p><p className="text-sm font-black text-gray-900">{selectedCustomer[field] || 'Not recorded'}</p></div>)}
                             </div>
                             <div className="mt-6 pt-6 border-t border-gray-200 flex justify-between items-center">
                                 <div><p className="text-[8px] font-black text-gray-400 uppercase">Outstanding Liability</p><p className={`text-2xl font-black ${(selectedCustomer.outstandingDebt || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatUGX(selectedCustomer.outstandingDebt || 0)}</p></div>

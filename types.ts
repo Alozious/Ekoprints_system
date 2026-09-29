@@ -68,6 +68,8 @@ export interface SaleItem {
 }
 
 export interface Customer {
+  category?: string;
+  district?: string;
   id: string;
   name: string;
   email: string;

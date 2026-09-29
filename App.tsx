@@ -7,6 +7,7 @@ import SalesView from './components/SalesView';
 import InventoryView from './components/InventoryView';
 import ExpensesView from './components/ExpensesView';
 import CustomersView from './components/CustomersView';
+import MarketingView from './components/MarketingView';
 import ReportsView from './components/ReportsView';
 import LoginView from './components/LoginView';
 import UserManagementView from './components/UserManagementView';
@@ -372,6 +373,21 @@ const App: React.FC = () => {
                         {activeView === 'Customers' && (
                             <CustomersView
                                 customers={customers} sales={sales}
+                                onImportCustomers={async (rows) => {
+                                    if (!rows.length || rows.length > 400) throw new Error('Import between 1 and 400 customers.');
+                                    const batch = writeBatch(db);
+                                    const imported = rows.map(({ id, data }) => {
+                                        const existing = id ? customers.find(c => c.id === id) : undefined;
+                                        if (id && !existing) throw new Error('Customer no longer exists. Refresh and review again.');
+                                        const ref = id ? doc(db, 'customers', id) : doc(collection(db, 'customers'));
+                                        const customer = { ...data, createdAt: existing?.createdAt || new Date().toISOString() };
+                                        if (id) batch.update(ref, data);
+                                        else batch.set(ref, customer);
+                                        return { ...existing, ...customer, id: ref.id };
+                                    });
+                                    await batch.commit();
+                                    setCustomers(previous => [...imported, ...previous.filter(c => !imported.some(item => item.id === c.id))]);
+                                }}
                                 onAddCustomer={(data) => createDocument('customers', { ...data, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 onUpdateCustomer={(id, data) => updateDocument('customers', id, data, setCustomers, 'Customer updated.')}
                                 onDeleteCustomer={(id) => deleteDocument('customers', id, setCustomers, 'Customer deleted.')}
@@ -400,6 +416,7 @@ const App: React.FC = () => {
                                 settings={settings}
                             />
                         )}
+                        {activeView === 'Marketing' && currentUser.role === 'admin' && <MarketingView customers={customers} />}
                         {activeView === 'Users' && currentUser.role === 'admin' && (
                             <UserManagementView users={users} currentUser={currentUser} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} />
                         )}

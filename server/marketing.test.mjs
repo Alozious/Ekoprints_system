@@ -9,7 +9,9 @@ import { buildSmsPayload, egoRequest, validateCampaign } from './ego.mjs';
 const draft = { title: 'Test only', channel: 'sms', message: 'Test message', recipients: [{ name: 'Example', phone: '+256700123456' }] };
 async function harness(t, provider, authenticate = async () => 'admin-test') {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'eko-marketing-test-'));
-    const api = createMarketingApi({ directory, provider, authenticate });
+    let savedSettings = {};
+    const settingsStore = { load: async () => savedSettings, save: async (_req, config) => { savedSettings = { ...config }; } };
+    const api = createMarketingApi({ directory, provider, authenticate, settingsStore });
     const server = createServer((req, res) => api(req, res, () => { res.writeHead(404).end(); }));
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     t.after(async () => { await new Promise(resolve => server.close(resolve)); assert.ok(path.resolve(directory).startsWith(path.resolve(os.tmpdir()) + path.sep + 'eko-marketing-test-')); await rm(directory, { recursive: true, force: true }); });
@@ -71,3 +73,4 @@ test('authentication rejects unauthenticated and non-admin accounts', async t =>
     let requests = 0;
     await assert.rejects(() => verifyAdmin({ headers: { authorization: 'Bearer test-token' } }, async () => ({ ok: true, json: async () => ++requests === 1 ? { users: [{ localId: 'example' }] } : { fields: { role: { stringValue: 'user' } } } })), /administrators/);
 });
+

@@ -8,6 +8,7 @@ import InventoryView from './components/InventoryView';
 import ExpensesView from './components/ExpensesView';
 import CustomersView from './components/CustomersView';
 import MarketingView from './components/MarketingView';
+import { migrateCustomerCategories } from './migrateCustomerCategories';
 import ReportsView from './components/ReportsView';
 import LoginView from './components/LoginView';
 import UserManagementView from './components/UserManagementView';
@@ -32,6 +33,16 @@ const App: React.FC = () => {
     const [activeView, setActiveView] = useState('Dashboard');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+    useEffect(() => {
+        const navigateToMarketing = () => {
+            if (currentUser?.role === 'admin' && window.location.hash.startsWith('#marketing')) {
+                setActiveView('Marketing');
+            }
+        };
+        navigateToMarketing();
+        window.addEventListener('hashchange', navigateToMarketing);
+        return () => window.removeEventListener('hashchange', navigateToMarketing);
+    }, [currentUser?.role]);
     const [appLoading, setAppLoading] = useState(true);
     const [operationLoading, setOperationLoading] = useState(false);
 
@@ -83,6 +94,14 @@ const App: React.FC = () => {
         if (!currentUser) return;
         setOperationLoading(true);
         try {
+            if (currentUser.role === 'admin') {
+                try {
+                    const changed = await migrateCustomerCategories();
+                    if (changed !== undefined) addToast(`Customer categories verified in Firebase. ${changed} records updated to PRINTING-PHOTOGRAPHY-BRANDING.`, 'success');
+                } catch (error) {
+                    addToast(`Customer category update failed: ${error instanceof Error ? error.message : 'Unable to update Firebase'}`, 'error');
+                }
+            }
             const dataPromises = [
                 fetchData('users').then(data => setUsers(data as User[])),
                 fetchData('customers').then(data => setCustomers(data as Customer[])),
@@ -124,7 +143,7 @@ const App: React.FC = () => {
                     const userData = userDocSnap.data() as Omit<User, 'id'>;
                     setCurrentUser({ id: firebaseUser.uid, ...userData });
                     if (userData.role === 'user') setActiveView('Sales');
-                    else setActiveView('Dashboard');
+                    else setActiveView(window.location.hash.startsWith('#marketing') ? 'Marketing' : 'Dashboard');
                 } else {
                     console.error("User document not found in Firestore!");
                     setCurrentUser(null);
@@ -375,6 +394,9 @@ const App: React.FC = () => {
                                 customers={customers} sales={sales}
                                 onImportCustomers={async (rows) => {
                                     if (!rows.length || rows.length > 400) throw new Error('Import between 1 and 400 customers.');
+                                    for (const row of rows) {
+                                        if (row.data.category && !(settings.customerCategories || []).includes(row.data.category) && row.data.category !== customers.find(c => c.id === row.id)?.category) throw new Error('Add the imported customer category in Settings first: ' + row.data.category);
+                                    }
                                     const batch = writeBatch(db);
                                     const imported = rows.map(({ id, data }) => {
                                         const existing = id ? customers.find(c => c.id === id) : undefined;

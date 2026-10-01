@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateCampaign, buildSmsPayload, egoRequest } from './ego.mjs';
+import { createFirebaseSettings } from './firebaseSettings.mjs';
 const projectId = 'ekoprints-63f33';
 const apiKey = 'AIzaSyCNieyBeHBTLgXqiKt4BUnYZMehbDKJYYo';
 export async function verifyAdmin(req, fetcher = fetch) {
@@ -17,7 +18,7 @@ export async function verifyAdmin(req, fetcher = fetch) {
     if (!roleResponse.ok || role.fields?.role?.stringValue !== 'admin') throw Object.assign(new Error('Marketing is available to administrators only.'), { status: 403 });
     return uid;
 }
-export function createMarketingApi({ directory = path.resolve('.marketing.local'), authenticate = verifyAdmin, provider = egoRequest } = {}) {
+export function createMarketingApi({ directory = path.resolve('.marketing.local'), authenticate = verifyAdmin, provider = egoRequest, settingsStore = createFirebaseSettings({ directory }) } = {}) {
     let queue = Promise.resolve();
     const file = path.join(directory, 'store.json');
     async function load() {
@@ -33,18 +34,22 @@ export function createMarketingApi({ directory = path.resolve('.marketing.local'
     function publicConfig(config) { return { configured: !!(config.username && config.password && config.senderid), username: config.username || '', senderid: config.senderid || '' }; }
     async function route(req, body, uid, url) {
         const state = await load();
-        if (req.method === 'GET' && url === '/api/marketing') return { config: publicConfig(state.config), campaigns: state.campaigns };
+        if (req.method === 'GET' && url === '/api/marketing') return { config: publicConfig(await settingsStore.load(req)), campaigns: state.campaigns };
         if (req.method !== 'POST') throw Object.assign(new Error('Not found.'), { status: 404 });
         if (url === '/api/marketing/config') {
-            const username = String(body.username || '').trim(), senderid = String(body.senderid || '').trim();
-            const password = typeof body.password === 'string' && body.password ? body.password : (username === state.config.username ? state.config.password : '');
+            const username = String(body.username || '').trim(), senderid = String(body.senderid || 'EgoSMS').trim();
+            const previous = body.password ? {} : await settingsStore.load(req);
+            const password = typeof body.password === 'string' && body.password ? body.password : (username === previous.username ? previous.password : '');
             if (!username || !password || !senderid || username.length > 200 || password.length > 1000 || senderid.length > 50) throw new Error('Enter your EGO SMS API username, password and configured sender ID.');
-            state.config = { username, password, senderid };
-            await persist(state); return publicConfig(state.config);
+            const config = { username, password, senderid };
+            await settingsStore.save(req, config, uid);
+            delete state.config;
+            await persist(state); return publicConfig(config);
         }
         if (url === '/api/marketing/balance') {
-            if (!publicConfig(state.config).configured) throw new Error('Set up EGO SMS first.');
-            const result = await provider({ method: 'Balance', userdata: { username: state.config.username, password: state.config.password } });
+            const config = await settingsStore.load(req);
+            if (!publicConfig(config).configured) throw new Error('Set up EGO SMS first.');
+            const result = await provider({ method: 'Balance', userdata: { username: config.username, password: config.password } });
             if (result.status === 'failed') throw new Error('Balance check failed. Verify your EGO SMS credentials and account.');
             return { balance: result.balance };
         }
@@ -59,12 +64,13 @@ export function createMarketingApi({ directory = path.resolve('.marketing.local'
         if (!campaign || campaign.channel !== 'sms') throw new Error('SMS campaign not found.');
         if (campaign.status !== 'draft') throw new Error('This campaign has already been submitted. Refresh and check its result; it will not be sent again.');
         if (body.confirmRecipients !== campaign.recipients.length) throw new Error('Review the campaign recipients before sending.');
-        if (!publicConfig(state.config).configured) throw new Error('Set up EGO SMS first.');
+        const config = await settingsStore.load(req);
+        if (!publicConfig(config).configured) throw new Error('Set up EGO SMS first.');
         campaign.status = 'submitting'; campaign.submittedAt = new Date().toISOString(); campaign.submittedBy = uid;
-        campaign.senderid = state.config.senderid;
+        campaign.senderid = config.senderid;
         await persist(state); // Persist before sending: ambiguous sends are never automatically retried.
         try {
-            const result = await provider(buildSmsPayload(state.config, campaign));
+            const result = await provider(buildSmsPayload(config, campaign));
             campaign.status = result.status;
             campaign.cost = result.cost ?? null;
             campaign.trackingCode = result.trackingCode || '';

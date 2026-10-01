@@ -18,3 +18,24 @@ export function campaignAudience(customers: Customer[], primaryOnly = false) {
     return { recipients: [...recipients.values()], invalid, duplicates, missing };
 }
 
+
+export type AudienceFilters = { category: string; district: string; search: string; from: string; to: string; sort: string };
+export function filterCampaignCustomers(customers: Customer[], filters: AudienceFilters) {
+    const { category, district, search, from, to, sort } = filters;
+    return customers.filter(c => {
+        const date = new Date(c.createdAt);
+        const day = Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+        return (!category || (c.category || '').toLowerCase() === category.toLowerCase()) &&
+            (!district || (c.district || '').toLowerCase().includes(district.toLowerCase())) &&
+            `${c.name} ${c.phone} ${c.email} ${c.category || ''} ${c.district || ''}`.toLowerCase().includes(search.toLowerCase()) &&
+            (!from || (!!day && day >= from)) && (!to || (!!day && day <= to));
+    }).sort((a, b) => {
+        if (sort === 'name-desc') return b.name.localeCompare(a.name);
+        if (sort === 'oldest') return (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0);
+        if (sort === 'newest') return (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+        return a.name.localeCompare(b.name);
+    });
+}
+export function combineRecipients(system: Recipient[], manual: Recipient[]) {
+    return [...new Map([...manual, ...system].map(r => [r.phone, r])).values()];
+}

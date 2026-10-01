@@ -31,8 +31,9 @@ const EditCustomerModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     customer: Customer;
+    categories: string[];
     onUpdateCustomer: (id: string, customerData: Omit<Customer, 'id' | 'totalSpent' | 'createdAt'>) => Promise<void>;
-}> = ({ isOpen, onClose, customer, onUpdateCustomer }) => {
+}> = ({ isOpen, onClose, customer, categories, onUpdateCustomer }) => {
     const [formData, setFormData] = useState<Omit<Customer, 'id' | 'totalSpent' | 'createdAt'>>({
         name: '', email: '', phone: '', address: ''
     });
@@ -87,7 +88,7 @@ const EditCustomerModal: React.FC<{
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                    {(['category', 'district'] as const).map(field => <label className="text-sm capitalize" key={field}>{field}<input aria-label={`Customer ${field}`} value={formData[field] || ''} onChange={e => setFormData({ ...formData, [field]: e.target.value })} className={darkInput} /></label>)}
+                    {(['category', 'district'] as const).map(field => <label className="text-sm capitalize" key={field}>{field}{field === 'category' ? <select aria-label="Customer category" value={formData.category || ''} onChange={e => setFormData({ ...formData, category: e.target.value })} className={darkInput}><option value="">No category</option>{[...new Set([...(categories), ...(formData.category ? [formData.category] : [])])].map(c => <option key={c} value={c}>{c}</option>)}</select> : <input aria-label={`Customer ${field}`} value={formData[field] || ''} onChange={e => setFormData({ ...formData, [field]: e.target.value })} className={darkInput} />}</label>)}
                 </div>
                 <div className="pt-4">
                     <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all border border-yellow-400/20">Save Profile Updates</button>
@@ -172,6 +173,17 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
         });
 
         return [...filtered].sort((a, b) => {
+            const [field, direction] = sortOrder.split('-');
+            if (['phone', 'address', 'category', 'district'].includes(field)) {
+                const key = field as 'phone' | 'address' | 'category' | 'district';
+                const left = (a[key] || '').trim(), right = (b[key] || '').trim();
+                if (direction === 'missing' || direction === 'present') {
+                    return (Number(Boolean(left)) - Number(Boolean(right))) * (direction === 'missing' ? 1 : -1) || a.name.localeCompare(b.name);
+                }
+                // Keep missing values last in either alphabetical direction.
+                if (!left || !right) return Number(Boolean(right)) - Number(Boolean(left)) || a.name.localeCompare(b.name);
+                return left.localeCompare(right, undefined, { sensitivity: 'base', numeric: true }) * (direction === 'desc' ? -1 : 1) || a.name.localeCompare(b.name);
+            }
             switch (sortOrder) {
                 case 'name-asc':
                     return a.name.localeCompare(b.name);
@@ -521,7 +533,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 </div>
 
                 {/* Sort */}
-                <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className={filterInputClass}>
+                <select aria-label="Sort customers" value={sortOrder} onChange={e => setSortOrder(e.target.value)} className={filterInputClass}>
                     <option value="date-desc">Newest First</option>
                     <option value="date-asc">Oldest First</option>
                     <option value="spending-desc">Top Spenders</option>
@@ -529,6 +541,11 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                     <option value="debt-desc">Highest Debt</option>
                     <option value="name-asc">Name A-Z</option>
                     <option value="name-desc">Name Z-A</option>
+                    {(['phone', 'address', 'category', 'district'] as const).map(field => <optgroup key={field} label={field === 'phone' ? 'Contact' : field}>
+                        <option value={`${field}-present`}>With {field === 'phone' ? 'contact' : field} first</option>
+                        <option value={`${field}-missing`}>No {field === 'phone' ? 'contact' : field} first</option>
+                        {field !== 'phone' && <><option value={`${field}-asc`}>{field} A–Z</option><option value={`${field}-desc`}>{field} Z–A</option></>}
+                    </optgroup>)}
                 </select>
 
                 {/* Date range */}
@@ -577,10 +594,15 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                     <thead className="text-[9px] text-gray-400 uppercase bg-gray-50 font-black tracking-widest">
                         <tr>
                             <th className="px-4 py-3 w-[20%]">Name</th>
-                            <th className="px-4 py-3 w-[18%]">Contact</th>
-                            <th className="px-4 py-3 w-[18%]">Address</th>
-                            <th className="px-4 py-3">Category</th>
-                            <th className="px-4 py-3">District</th>
+                            {(['phone', 'address', 'category', 'district'] as const).map(field => <th key={field} className="px-4 py-3">
+                                <span>{field === 'phone' ? 'Contact' : field}</span>
+                                <select aria-label={`Sort by ${field === 'phone' ? 'contact' : field}`} className="block mt-1 max-w-[130px] rounded border border-gray-200 bg-white p-1 text-[10px] text-gray-700 font-normal normal-case tracking-normal" value={sortOrder.startsWith(`${field}-`) ? sortOrder : ''} onChange={e => { if (e.target.value) setSortOrder(e.target.value); }}>
+                                    <option value="">Sort…</option>
+                                    <option value={`${field}-present`}>With {field === 'phone' ? 'contact' : field} first</option>
+                                    <option value={`${field}-missing`}>No {field === 'phone' ? 'contact' : field} first</option>
+                                    {field !== 'phone' && <><option value={`${field}-asc`}>A–Z</option><option value={`${field}-desc`}>Z–A</option></>}
+                                </select>
+                            </th>)}
                             <th className="px-4 py-3 w-[12%]">Registered</th>
                             <th className="px-4 py-3 w-[14%] text-right">Total Spent</th>
                             <th className="px-4 py-3 w-[10%] text-right">Debt</th>
@@ -659,7 +681,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
             {/* Add Customer Modal */}
             <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Register New Client">
                 <form onSubmit={handleAddCustomer} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">{(['category', 'district'] as const).map(field => <label key={field} className="text-sm capitalize">{field}<input aria-label={`New customer ${field}`} value={newCustomer[field] || ''} onChange={e => setNewCustomer({ ...newCustomer, [field]: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3" /></label>)}</div>
+                    <div className="grid grid-cols-2 gap-4">{(['category', 'district'] as const).map(field => <label key={field} className="text-sm capitalize">{field}{field === 'category' ? <select aria-label="New customer category" value={newCustomer.category || ''} onChange={e => setNewCustomer({ ...newCustomer, category: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3"><option value="">No category</option>{[...new Set([...(settings.customerCategories || []), ...(newCustomer.category ? [newCustomer.category] : [])])].map(c => <option key={c} value={c}>{c}</option>)}</select> : <input aria-label={`New customer ${field}`} value={newCustomer[field] || ''} onChange={e => setNewCustomer({ ...newCustomer, [field]: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3" />}</label>)}</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="md:col-span-2 space-y-1.5">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Legal Name</label>
@@ -690,6 +712,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                     isOpen={isEditModalOpen}
                     onClose={handleCloseEditModal}
                     customer={editingCustomer}
+                    categories={settings.customerCategories || []}
                     onUpdateCustomer={onUpdateCustomer}
                 />
             )}

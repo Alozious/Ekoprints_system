@@ -194,6 +194,10 @@ export interface BankingRecord {
 }
 
 export interface SystemSettings {
+  customerCategories?: string[];
+  customerCategoryMigrationV1?: boolean;
+  customerCategoryMigrationV2?: boolean;
+  customerCategoryMigrationV3?: boolean;
   businessName: string;
   tagline: string;
   businessEmail: string;

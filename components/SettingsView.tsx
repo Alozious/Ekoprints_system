@@ -52,7 +52,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onUpdateSettings(formData);
+        await onUpdateSettings({ ...formData, customerCategories: [...new Set((formData.customerCategories || []).map(c => c.trim()).filter(Boolean))] });
     };
 
     const inputClass = "mt-1 block w-full rounded-xl border-none bg-white p-4 text-sm font-bold text-gray-900 shadow-sm border border-gray-100 focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-400";
@@ -65,6 +65,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+                <section className="bg-white rounded-2xl p-6 space-y-3">
+                    <h3 className="font-bold">Customer categories</h3>
+                    <p className="text-sm text-gray-500">Set available customer categories, one per line. Removing a choice leaves existing customer records unchanged.</p>
+                    <textarea aria-label="Customer categories" rows={5} className={inputClass} value={(formData.customerCategories || []).join('\n')} onChange={e => setFormData({ ...formData, customerCategories: e.target.value.split('\n') })} />
+                    <p className="text-sm">Use Save Settings below to save your categories.</p>
+                </section>
                 <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">

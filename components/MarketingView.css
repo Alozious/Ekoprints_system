@@ -1,0 +1,41 @@
+.sms-center { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; color: #334155; }
+.sms-heading { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.sms-heading h2 { font-size: 34px; font-weight: 800; letter-spacing: -.8px; margin: 7px 0; }
+.sms-heading p, .sms-muted { color: #64748b; font-size: 13px; }
+.sms-back { color: #2563a5; font-size: 13px; font-weight: 600; }
+.sms-wallet { background: white; border-top: 4px solid #2563a5; border-radius: 6px; padding: 13px 20px; min-width: 190px; box-shadow: 0 2px 8px #1e293b12; }
+.sms-wallet span, .sms-wallet strong, .sms-wallet button { display: block; }
+.sms-wallet span { font-size: 10px; letter-spacing: .7px; color: #64748b; }
+.sms-wallet strong { font-size: 16px; color: #215ca5; margin: 5px 0; }
+.sms-wallet button { font-size: 12px; color: #2563a5; }
+.sms-nav { align-self: start; padding: 5px 0; background: white; border: 1px solid #dbe2ea; border-radius: 5px; box-shadow: 0 2px 4px #1e293b0d; }
+.sms-nav button { display: block; width: 100%; text-align: left; padding: 15px 13px; color: #35618a; font-size: 13px; }
+.sms-nav button:hover { background: #eff6ff; }
+.sms-nav button[aria-current="page"] { background: #2196ed; color: white; }
+.sms-content { min-width: 0; }
+.sms-content > [role] { margin-bottom: 16px; }
+.sms-center .sms-panel { border: 1px solid #e2e8f0; border-radius: 6px; padding: 24px; box-shadow: 0 2px 4px #1e293b08; }
+.sms-panel > div:first-child h3 { font-weight: 500; font-size: 21px; }
+.sms-center .sms-panel form { border: 0; border-radius: 0; padding: 0; }
+.sms-center input:not([type="checkbox"]):not([type="radio"]), .sms-center textarea, .sms-center select { border-radius: 4px; border-color: #cbd5e1; background: #f8fafc; font-weight: 400; margin-top: 5px; }
+.sms-center input:focus, .sms-center textarea:focus, .sms-center select:focus { outline: 2px solid #93c5fd; outline-offset: 1px; }
+.sms-center input[type="checkbox"], .sms-center input[type="radio"] { accent-color: #2196ed; margin-right: 6px; }
+.sms-center button.rounded-xl { border-radius: 4px; }
+.sms-center .bg-yellow-400 { background: #2196ed; color: white; }
+.sms-center .bg-yellow-400:hover { background: #147ac3; }
+.sms-center button:disabled { opacity: .45; cursor: not-allowed; }
+.sms-sender { display: grid; grid-template-columns: 150px 1fr; align-items: center; padding: 20px 0; border-bottom: 1px solid #d5dbe3; font-size: 13px; }
+.sms-sender > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sms-sender-badge { background: #2196ed; color: white; border-radius: 18px; padding: 6px 15px; font-weight: 600; }
+.sms-sender button { color: #2563a5; text-decoration: underline; }
+.sms-recipient-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding-top: 8px; font-size: 13px; }
+.sms-recipient-tabs strong { min-width: 132px; }
+.sms-recipient-tabs label { display: flex; align-items: center; cursor: pointer; }
+.sms-recipient-tabs span { color: #64748b; margin-left: auto; }
+.sms-center fieldset { border-radius: 4px; border-color: #e2e8f0; }
+.sms-center fieldset > .grid { grid-template-columns: 1fr; }
+.sms-center fieldset input { max-width: 320px; }
+.sms-center form > label:last-of-type { display: block; padding-top: 20px; border-top: 1px solid #d5dbe3; }
+.sms-center form > .flex:last-child { padding-top: 18px; border-top: 1px solid #d5dbe3; }
+@media (max-width: 1000px) { .sms-center { grid-template-columns: 1fr; gap: 16px; } .sms-nav { display: flex; flex-wrap: wrap; } .sms-nav button { width: auto; flex: 1; } }
+@media (max-width: 600px) { .sms-heading { align-items: flex-start; flex-direction: column; } .sms-heading h2 { font-size: 28px; } .sms-wallet { width: 100%; } .sms-center .sms-panel { padding: 16px; } .sms-sender { grid-template-columns: 1fr; gap: 12px; } .sms-recipient-tabs strong { width: 100%; } .sms-recipient-tabs span { margin-left: 0; } }

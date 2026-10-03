@@ -1,4 +1,5 @@
 import { createCloudCampaignStore } from './cloudCampaignStore.mjs';
+import { checkMarketingOrigin } from './marketingOrigin.mjs';
 import './trust.mjs';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
@@ -90,9 +91,7 @@ export function createMarketingApi({ directory = path.resolve('.marketing.local'
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('Content-Type', 'application/json');
         try {
-            const allowed = process.env.MARKETING_ORIGIN || `http://${req.headers.host}`;
-            if (!process.env.MARKETING_ORIGIN && !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) throw Object.assign(new Error('Marketing is restricted to localhost until a deployment origin is configured.'), { status: 403 });
-            if ((req.headers.origin && req.headers.origin !== allowed) || req.headers['sec-fetch-site'] === 'cross-site') throw Object.assign(new Error('Origin is not allowed.'), { status: 403 });
+            checkMarketingOrigin(req);
             const uid = await authenticate(req);
             let body = {};
             if (req.method === 'POST') {

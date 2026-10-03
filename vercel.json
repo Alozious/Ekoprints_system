@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "env": { "MARKETING_ORIGIN": "https://ekoprints-system.vercel.app" },
   "functions": { "api/marketing/**/*.mjs": { "maxDuration": 60 } }
 }

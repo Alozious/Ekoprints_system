@@ -19,4 +19,4 @@ match /marketingSettings/{document} {
 
 Campaigns on Vercel use a Firestore ledger with conditional writes to prevent duplicate concurrent sends. Local campaign history is not automatically copied. The ledger rejects writes above 900 KB; larger installations need per-campaign storage. Provider timeouts remain uncertain; check EGO SMS before retrying.
 
-Personalization tokens such as `{{name:20}}` are expanded separately for each saved recipient. The limit keeps the first 20 characters, with three additional dots only if the value exceeds 20 characters. Values at or below the limit stay unchanged. Empty fields render blank; use the previews before sending.
+Personalization tokens such as `{{name:20}}` are expanded separately for each saved recipient. The limit includes three dots: a value exceeding 20 characters becomes its first 17 characters plus ... (20 total). Values at or below the limit stay unchanged. Empty fields render blank; use the previews before sending.

@@ -5,7 +5,7 @@ import { Campaign, Recipient, campaignAudience, filterCampaignCustomers, combine
 import { cleanPhones, splitContacts } from '../customerImport';
 import Modal from './Modal';
 import './MarketingView.css';
-import { messageFields, personalizeMessage } from '../messagePersonalization.mjs';
+import { messageFields, personalizeMessage, messageLengthSummary } from '../messagePersonalization.mjs';
 
 type Config = { configured: boolean; username: string; senderid: string };
 async function api(path = '', body?: unknown) {
@@ -58,6 +58,7 @@ export default function MarketingView({ customers }: { customers: Customer[] }) 
     const audience = useMemo(() => campaignAudience(customers.filter(c => selected.includes(c.id)), primaryOnly), [customers, selected, primaryOnly]);
     const combined = combineRecipients(audience.recipients, manual);
     const recipients = combined.filter(r => !excluded.includes(r.phone));
+    const messageStats = messageLengthSummary(message, recipients);
     async function refresh() {
         const data = await api(); setConfig(data.config); setCampaigns(data.campaigns);
         setUsername(data.config.username); setSenderid(data.config.senderid);
@@ -127,11 +128,12 @@ export default function MarketingView({ customers }: { customers: Customer[] }) 
                 <details><summary className="cursor-pointer font-bold text-sm">Review / exclude individual contacts</summary><div className="max-h-48 overflow-auto p-3">{combined.map(r => <label key={r.phone} className="block text-sm"><input type="checkbox" checked={!excluded.includes(r.phone)} onChange={e => setExcluded(e.target.checked ? excluded.filter(p => p !== r.phone) : [...excluded, r.phone])} /> {r.name} — {r.phone}</label>)}</div></details>
                 <fieldset className="border rounded p-3 space-y-3"><legend>Customize message</legend><div className="flex flex-wrap gap-3 items-end">
                 <label>Customer column<select className={input} value={personalField} onChange={e => setPersonalField(e.target.value)}>{messageFields.map(field => <option key={field}>{field}</option>)}</select></label>
-                <label>Character limit<input className={input} type="number" min={1} max={500} value={fieldLimit} onChange={e => setFieldLimit(Number(e.target.value))} /></label>
-                <button type="button" className={`${button} bg-blue-50 text-blue-700`} disabled={!Number.isInteger(fieldLimit) || fieldLimit < 1 || fieldLimit > 500} onClick={() => setMessage(previous => previous + `{{${personalField}:${fieldLimit}}}`)}>Insert field</button></div>
-                <p className="text-xs">Inserts at the end of your message. The limit keeps that many characters from the field, then adds ... only if the value is longer. At 20, a long name uses 20 characters plus 3 dots. Shorter names stay unchanged; empty fields appear blank. To change an inserted field, edit its limit in the message, for example {'{{name:20}}'}.</p></fieldset>
+                <label>Character limit<input className={input} type="number" min={3} max={500} value={fieldLimit} onChange={e => setFieldLimit(Number(e.target.value))} /></label>
+                <button type="button" className={`${button} bg-blue-50 text-blue-700`} disabled={!Number.isInteger(fieldLimit) || fieldLimit < 3 || fieldLimit > 500} onClick={() => setMessage(previous => previous + `{{${personalField}:${fieldLimit}}}`)}>Insert field</button></div>
+                <p className="text-xs">Inserts at the end of your message. The limit includes the three dots. At 20, a long name uses 17 characters plus ... (20 total). Dots appear only when the value exceeds the limit. Shorter names stay unchanged; empty fields appear blank. To change an inserted field, edit its limit in the message, for example {'{{name:20}}'}.</p></fieldset>
                 <label className="block font-bold text-sm">Message<textarea required rows={4} maxLength={1600} value={message} onChange={e => setMessage(e.target.value)} className={input} placeholder="Write your campaign message…" /></label><p className="text-xs text-gray-500">{message.length}/1600 characters. SMS charges depend on message length and encoding; EGO SMS returns the actual credit cost after submission.</p>
-                {message && <details open><summary>Personalized previews</summary><div className="max-h-48 overflow-auto">{recipients.map(r => <div key={r.phone} className="p-2 border-b"><strong>{r.name} ({personalizeMessage(message, r).length} characters)</strong><p className="whitespace-pre-wrap">{personalizeMessage(message, r)}</p></div>)}</div></details>}
+                {message && <section aria-label="Message length summary" className="rounded border bg-blue-50 p-3 space-y-2"><h4 className="font-bold text-sm">Message length summary</h4>{messageStats ? <><div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">{[['Shortest', messageStats.shortest], ['Longest', messageStats.longest], ['Average', messageStats.average], ['Median (middle)', messageStats.median]].map(([label, count]) => <div key={String(label)}><span className="block text-gray-600">{label}</span><strong>{Number(count).toLocaleString(undefined, { maximumFractionDigits: 1 })} characters</strong></div>)}</div><p className="text-xs">Based on all {recipients.length} selected phone contacts after personalization. Character counts are not SMS segment counts.</p></> : <p className="text-sm">Select contacts to see message lengths.</p>}</section>}
+                {message && <details open><summary>Personalized previews</summary><div className="max-h-48 overflow-auto">{recipients.map(r => <div key={r.phone} className="p-2 border-b"><strong>{r.name} ({Array.from(personalizeMessage(message, r)).length} characters)</strong><p className="whitespace-pre-wrap">{personalizeMessage(message, r)}</p></div>)}</div></details>}
                 {recipients.length > 1000 && <p className="text-red-700">Select at most 1,000 phone contacts for this campaign.</p>}
                 <div className="flex gap-3"><button disabled={busy || !recipients.length || recipients.length > 1000} className={`${button} bg-yellow-400`} type="submit">Review campaign →</button><button disabled={busy} className={`${button} bg-gray-100`} type="button" onClick={() => { setEditing(false); setSmsPage('campaigns'); }}>Cancel</button></div>
             </form>}

@@ -1,6 +1,6 @@
 import type { Customer } from './types';
 import { cleanPhone, splitContacts } from './customerImport.ts';
-export type Recipient = { name: string; phone: string };
+export type Recipient = { name: string; phone: string; address?: string; category?: string; district?: string; email?: string };
 export type Campaign = { id: string; title: string; channel: 'sms' | 'whatsapp'; message: string; recipients: Recipient[]; status: string; createdAt: string; cost?: number; trackingCode?: string; error?: string; senderid?: string };
 export function campaignAudience(customers: Customer[], primaryOnly = false) {
     const recipients = new Map<string, Recipient>();
@@ -12,7 +12,7 @@ export function campaignAudience(customers: Customer[], primaryOnly = false) {
             const phone = cleanPhone(part);
             if (!phone) { invalid++; continue; }
             if (recipients.has(phone)) { duplicates++; continue; }
-            recipients.set(phone, { name: customer.name, phone });
+            recipients.set(phone, { name: customer.name, phone, address: customer.address || '', category: customer.category || '', district: customer.district || '', email: customer.email || '' });
         }
     }
     return { recipients: [...recipients.values()], invalid, duplicates, missing };

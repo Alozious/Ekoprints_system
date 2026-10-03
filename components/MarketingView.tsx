@@ -5,13 +5,16 @@ import { Campaign, Recipient, campaignAudience, filterCampaignCustomers, combine
 import { cleanPhones, splitContacts } from '../customerImport';
 import Modal from './Modal';
 import './MarketingView.css';
+import { messageFields, personalizeMessage } from '../messagePersonalization.mjs';
 
 type Config = { configured: boolean; username: string; senderid: string };
 async function api(path = '', body?: unknown) {
     const token = await auth.currentUser?.getIdToken();
     if (!token) throw new Error('Sign in to use Marketing.');
     const response = await fetch(`/api/marketing${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
-    const result = await response.json();
+    let result;
+    try { result = JSON.parse(await response.text()); }
+    catch { throw new Error('The hosted SMS service is unavailable: /api/marketing returned a web page instead of JSON. The host must run the Node SMS server and route /api/marketing to it. If this happened while sending, check EGO SMS before retrying.'); }
     if (!response.ok) throw new Error(result.error || 'Marketing request failed.');
     return result;
 }
@@ -32,6 +35,8 @@ export default function MarketingView({ customers }: { customers: Customer[] }) 
         return () => window.removeEventListener('hashchange', navigate);
     }, []);
     const [title, setTitle] = useState(''), [message, setMessage] = useState('');
+    const [personalField, setPersonalField] = useState('name');
+    const [fieldLimit, setFieldLimit] = useState(20);
     const [category, setCategory] = useState(''), [district, setDistrict] = useState(''), [search, setSearch] = useState('');
     const [selected, setSelected] = useState<string[]>([]), [excluded, setExcluded] = useState<string[]>([]);
     const [primaryOnly, setPrimaryOnly] = useState(false);
@@ -120,7 +125,13 @@ export default function MarketingView({ customers }: { customers: Customer[] }) 
                 }}>Add contacts</button><p className="text-xs text-gray-500">These contacts are added to this campaign only. Repeated numbers across manual contacts and selected customers receive one message.</p><div className="max-h-32 overflow-auto">{manual.map(r => <div key={r.phone} className="flex justify-between text-sm"><span>{r.name} — {r.phone}</span><button type="button" className="text-red-600" onClick={() => setManual(previous => previous.filter(item => item.phone !== r.phone))}>Remove</button></div>)}</div></fieldset></div>
                 <p className="text-sm">{selected.length} selected customers · {manual.length} manual contacts · <strong>{recipients.length} unique phone contacts</strong> · {audience.duplicates} repeated contacts removed · {audience.invalid} invalid contacts excluded · {audience.missing} customers without contacts. Selected contacts are kept when you change search, category, district, dates or sort order.</p>
                 <details><summary className="cursor-pointer font-bold text-sm">Review / exclude individual contacts</summary><div className="max-h-48 overflow-auto p-3">{combined.map(r => <label key={r.phone} className="block text-sm"><input type="checkbox" checked={!excluded.includes(r.phone)} onChange={e => setExcluded(e.target.checked ? excluded.filter(p => p !== r.phone) : [...excluded, r.phone])} /> {r.name} — {r.phone}</label>)}</div></details>
+                <fieldset className="border rounded p-3 space-y-3"><legend>Customize message</legend><div className="flex flex-wrap gap-3 items-end">
+                <label>Customer column<select className={input} value={personalField} onChange={e => setPersonalField(e.target.value)}>{messageFields.map(field => <option key={field}>{field}</option>)}</select></label>
+                <label>Character limit<input className={input} type="number" min={7} max={500} value={fieldLimit} onChange={e => setFieldLimit(Number(e.target.value))} /></label>
+                <button type="button" className={`${button} bg-blue-50 text-blue-700`} disabled={!Number.isInteger(fieldLimit) || fieldLimit < 7 || fieldLimit > 500} onClick={() => setMessage(previous => previous + `{{${personalField}:${fieldLimit}}}`)}>Insert field</button></div>
+                <p className="text-xs">Inserts at the end of your message. Long values end at a word where possible, with six dots included in the limit. Empty fields appear blank. A name limited to 20 characters can appear as amazing grace......</p></fieldset>
                 <label className="block font-bold text-sm">Message<textarea required rows={4} maxLength={1600} value={message} onChange={e => setMessage(e.target.value)} className={input} placeholder="Write your campaign message…" /></label><p className="text-xs text-gray-500">{message.length}/1600 characters. SMS charges depend on message length and encoding; EGO SMS returns the actual credit cost after submission.</p>
+                {message && <details open><summary>Personalized previews</summary><div className="max-h-48 overflow-auto">{recipients.map(r => <div key={r.phone} className="p-2 border-b"><strong>{r.name} ({personalizeMessage(message, r).length} characters)</strong><p className="whitespace-pre-wrap">{personalizeMessage(message, r)}</p></div>)}</div></details>}
                 {recipients.length > 1000 && <p className="text-red-700">Select at most 1,000 phone contacts for this campaign.</p>}
                 <div className="flex gap-3"><button disabled={busy || !recipients.length || recipients.length > 1000} className={`${button} bg-yellow-400`} type="submit">Review campaign →</button><button disabled={busy} className={`${button} bg-gray-100`} type="button" onClick={() => { setEditing(false); setSmsPage('campaigns'); }}>Cancel</button></div>
             </form>}
@@ -131,7 +142,7 @@ export default function MarketingView({ customers }: { customers: Customer[] }) 
         {review && <Modal isOpen title={review.title} size="lg" onClose={() => { if (!lock.current) { setReview(null); setConfirmSend(false); } }}><div className="space-y-4 text-sm">
             <p><strong>{review.recipients.length} phone contacts</strong> · {statusLabel[review.status] || review.status}</p><div className="p-4 bg-gray-50 rounded-xl whitespace-pre-wrap break-words">{review.message}</div>
             {review.channel === 'sms' && <><p>Sender ID: <strong>{review.senderid || config.senderid || 'Not configured'}</strong></p>{review.cost != null && <p>Credit cost: {review.cost}</p>}{review.trackingCode && <p className="break-all">EGO SMS tracking code: {review.trackingCode}</p>}<p className="text-gray-500">Accepted means EGO SMS received the campaign. Handset delivery reports are not connected on localhost; check the EGO SMS dashboard for delivery.</p>{review.error && <p className="text-red-700">{review.error}</p>}</>}
-            <div className="max-h-52 overflow-auto border rounded-xl p-3 space-y-2">{review.recipients.map(r => <div key={r.phone} className="flex justify-between gap-3"><span>{r.name} — {r.phone}</span>{review.channel === 'whatsapp' && <a className="text-emerald-700 font-bold" href={`https://wa.me/${r.phone.slice(1)}?text=${encodeURIComponent(review.message)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>}</div>)}</div>
+            <div className="max-h-52 overflow-auto border rounded-xl p-3 space-y-2">{review.recipients.map(r => <div key={r.phone} className="flex justify-between gap-3"><span>{r.name} — {r.phone}<span className="block whitespace-pre-wrap">{personalizeMessage(review.message, r)}</span></span>{review.channel === 'whatsapp' && <a className="text-emerald-700 font-bold" href={`https://wa.me/${r.phone.slice(1)}?text=${encodeURIComponent(personalizeMessage(review.message, r))}`} target="_blank" rel="noreferrer">Open WhatsApp</a>}</div>)}</div>
             {review.channel === 'sms' && review.status === 'draft' && <><label className="block"><input type="checkbox" checked={confirmSend} disabled={busy} onChange={e => setConfirmSend(e.target.checked)} /> Send this message to these {review.recipients.length} contacts using my EGO SMS credit.</label><button disabled={busy || !confirmSend || !config.configured} className={`${button} bg-yellow-400 w-full`} onClick={() => run(async () => { const result = await api(`/campaigns/${review.id}/send`, { confirmRecipients: review.recipients.length }); setCampaigns(previous => previous.map(c => c.id === result.id ? result : c)); setReview(result); setConfirmSend(false); })}>{busy ? 'Submitting…' : `Send SMS campaign to ${review.recipients.length} contacts`}</button>{!config.configured && <p>Configure EGO SMS before sending.</p>}</>}
             {error && <p role="alert" className="text-red-700">{error}</p>}
         </div></Modal>}

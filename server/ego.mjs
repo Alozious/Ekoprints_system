@@ -1,3 +1,4 @@
+import { messageFields, personalizeMessage } from '../messagePersonalization.mjs';
 export const EGO_ENDPOINT = 'https://comms.egosms.co/api/v1/json/';
 export function validateCampaign(input) {
     const title = String(input.title || '').trim();
@@ -9,12 +10,15 @@ export function validateCampaign(input) {
     const unique = new Map();
     for (const r of input.recipients) {
         if (!/^\+256[347]\d{8}$/.test(r.phone)) throw new Error('Every recipient must have a valid +256 phone number.');
-        if (!unique.has(r.phone)) unique.set(r.phone, { phone: r.phone, name: String(r.name || '').slice(0, 200) });
+        const recipient = { phone: r.phone, name: String(r.name || '').slice(0, 200) };
+        for (const field of messageFields.filter(f => !['phone', 'name'].includes(f))) if (r[field] != null) recipient[field] = String(r[field]).slice(0, 500);
+        if (personalizeMessage(message, recipient).length > 1600) throw new Error('A personalized message exceeds 1,600 characters. Reduce the message or field limits.');
+        if (!unique.has(r.phone)) unique.set(r.phone, recipient);
     }
     return { title, message, channel: input.channel, recipients: [...unique.values()] };
 }
 export function buildSmsPayload(config, campaign) {
-    return { method: 'SendSms', userdata: { username: config.username, password: config.password }, msgdata: campaign.recipients.map(r => ({ number: r.phone.slice(1), message: campaign.message, senderid: config.senderid, priority: 1 })) };
+    return { method: 'SendSms', userdata: { username: config.username, password: config.password }, msgdata: campaign.recipients.map(r => ({ number: r.phone.slice(1), message: personalizeMessage(campaign.message, r), senderid: config.senderid, priority: 1 })) };
 }
 export async function egoRequest(payload, fetcher = fetch) {
     const response = await fetcher(EGO_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) });

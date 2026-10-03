@@ -22,6 +22,7 @@ export function createFirebaseSettings({ directory, fetcher = fetch }) {
             if (value.length !== 32) throw new Error('MARKETING_ENCRYPTION_KEY must contain a base64 encoded 32-byte key.');
             return value;
         }
+        if (process.env.VERCEL) throw new Error('Set MARKETING_ENCRYPTION_KEY in Vercel before saving SMS settings.');
         const file = path.join(directory, 'encryption.key');
         if (create) {
             await mkdir(directory, { recursive: true, mode: 0o700 });

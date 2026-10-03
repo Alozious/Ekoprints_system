@@ -14,7 +14,7 @@ async function api(path = '', body?: unknown) {
     const response = await fetch(`/api/marketing${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
     let result;
     try { result = JSON.parse(await response.text()); }
-    catch { throw new Error('The hosted SMS service is unavailable: /api/marketing returned a web page instead of JSON. The host must run the Node SMS server and route /api/marketing to it. If this happened while sending, check EGO SMS before retrying.'); }
+    catch { throw new Error('The website could not reach its EGO SMS connection. Redeploy the latest Vercel routing fix. If this happened while sending, check campaign results and EGO SMS before retrying.'); }
     if (!response.ok) throw new Error(result.error || 'Marketing request failed.');
     return result;
 }

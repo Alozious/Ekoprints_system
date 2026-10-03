@@ -1,7 +1,7 @@
 # SMS on Vercel
 
 Deploy the whole repository (including `api` and `server`), not only `dist`.
-The Vercel functions provide `/api/marketing` and its subroutes.
+One Vercel function (`api/sms.mjs`) calls EGO SMS. Explicit rewrites route `/api/marketing` and all its subroutes, including campaign sends, to that function. No separate server deployment is needed.
 
 Before redeploying, set server-only environment variables:
 

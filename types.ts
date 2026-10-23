@@ -1,5 +1,10 @@
 
+export type Department = 'large-format' | 'dtf' | 'embroidery' | 'bizhub' | 'supplies' | 'products';
+export type AssignedDepartment = Department | 'Unassigned';
+export type StockUnit = 'roll' | 'ream' | 'packet' | 'bottle' | 'cartridge' | 'cone' | 'pcs';
+
 export interface ProductCategory {
+  isActive?: boolean;
   id: string;
   name: string; // e.g. "Tshirt"
   module: string; // e.g. "embroidery", "bizhub"
@@ -16,6 +21,7 @@ export interface ProductCategory {
 }
 
 export interface InventoryItem {
+  isActive?: boolean;
   id: string;
   name: string;
   category: string; // Links to ProductCategory name
@@ -24,9 +30,12 @@ export interface InventoryItem {
   price: number; // Selling Price (Preferred)
   minPrice: number; // Minimum negotiated price allowed
   purchasePrice?: number; // Cost Price for profit tracking
+  avgCost?: number;
+  costMissing?: boolean;
   sku: string;
   minStockLevel: number;
-  isConsumable?: boolean; // True for machine supplies, False for products for sale
+  /** @deprecated Removed when legacy usage screens are replaced. */
+  isConsumable?: boolean;
   // Dynamic attributes based on setup
   attr1?: string;
   attr2?: string;
@@ -41,6 +50,12 @@ export interface InventoryItem {
 }
 
 export interface SaleItem {
+  /** Explicit unopened material resale; dimension/service lines never populate this. */
+  materialSkuId?: string;
+  stockEntity?: 'material' | 'product';
+  module?: AssignedDepartment;
+  cogsAtSale?: number;
+  productId?: string;
   itemId: string;
   name: string;
   quantity: number;
@@ -103,7 +118,11 @@ export interface Sale {
   userId: string;
   userName?: string;
   payments?: Payment[];
+  /** @deprecated Legacy meter usage only. */
   usageLogged?: boolean;
+  inventoryVersion?: 1;
+  voidedAt?: string;
+  inventoryMovementIds?: string[];
   notes?: string;
   rules?: string[];
   careOf?: string;
@@ -127,6 +146,8 @@ export interface Quotation {
 }
 
 export interface Expense {
+  module?: AssignedDepartment;
+  expenseType?: 'operating';
   id: string;
   date: string;
   category: string;
@@ -151,6 +172,7 @@ export interface User {
 }
 
 export interface MaterialCategory {
+  unitType?: StockUnit;
   id: string;
   name: string;
   isActive: boolean;
@@ -158,25 +180,76 @@ export interface MaterialCategory {
 }
 
 export interface StockItem {
+  /** Selling price per whole unopened unit; quantities and costs remain on this material. */
+  resalePrice?: number;
+  reorderLevelNeedsReview?: boolean;
+  /** Firestore document identity; skuId is retained for Calculator compatibility. */
+  id?: string;
+  unit?: StockUnit;
+  unitsOnHand?: number;
+  avgCostPerUnit?: number;
+  variantLabel?: string;
+  rollLengthMeters?: number;
+  isActive?: boolean;
+  inventoryVersion?: 1;
   skuId: string;
   categoryId: string;
   module: string; // Business unit
   width: number; // in meters
   itemName: string;
+  /** @deprecated Read only migration input. */
   totalStockMeters: number;
   reorderLevel: number;
+  /** @deprecated Read only migration input. */
   lastPurchasePricePerRoll_UGX: number;
 }
 
-export interface StockTransaction {
+export interface LegacyStockTransaction {
+  id?: string;
   transactionId: string;
   skuId: string;
+  /** @deprecated Legacy meter movement. */
   transactionType: 'Stock-In' | 'Stock-Out';
   quantityMeters: number;
   date: string;
   jobId?: string;
   notes?: string;
+  legacy?: true;
 }
+
+export interface UnitStockTransaction {
+  id?: string;
+  transactionId: string;
+  skuId: string;
+  entity: 'material' | 'product';
+  type: 'Opening' | 'Purchase' | 'Start' | 'Adjustment' | 'Sale' | 'Reversal';
+  units: number;
+  unitCost: number;
+  totalValue: number;
+  module: AssignedDepartment;
+  date: string;
+  supplier?: string;
+  paymentStatus?: 'Paid' | 'Credit';
+  reference?: string;
+  notes?: string;
+  userId: string;
+  userName: string;
+  adminOverride?: boolean;
+  reverses?: string;
+  beforeUnits?: number;
+  afterUnits?: number;
+  /** Compatibility only: new records never populate meter fields. */
+  transactionType?: never;
+  quantityMeters?: never;
+  jobId?: never;
+  legacy?: false;
+}
+export type StockTransaction = LegacyStockTransaction | UnitStockTransaction;
+export type UnitStockItem = Omit<StockItem, 'width' | 'totalStockMeters' | 'lastPurchasePricePerRoll_UGX'> & {
+  width?: number; unit: StockUnit; unitsOnHand: number; avgCostPerUnit: number;
+};
+export type CostedInventoryItem = InventoryItem & { purchasePrice: number; avgCost: number };
+export type CostedSaleItem = SaleItem & { module: AssignedDepartment; cogsAtSale: number };
 
 export interface PricingTier {
   id: string;
@@ -194,6 +267,10 @@ export interface BankingRecord {
 }
 
 export interface SystemSettings {
+  id?: string;
+  inventoryMaterialMigrationV1?: boolean;
+  inventoryMigrationEnabled?: boolean;
+  inventoryMigrationV1?: boolean;
   customerCategories?: string[];
   customerCategoryMigrationV1?: boolean;
   customerCategoryMigrationV2?: boolean;

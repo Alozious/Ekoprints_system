@@ -1,9 +1,11 @@
+import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, ExpenseCategory } from '../types';
 import { SaveIcon, PlusIcon, EditIcon, TrashIcon } from './icons';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
+import InventoryMigrationPanel from './InventoryMigrationPanel';
 
 interface SettingsViewProps {
     settings: SystemSettings;
@@ -60,16 +62,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
+            <InventoryMigrationPanel settings={settings} onUpdateSettings={onUpdateSettings} />
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">System Settings</h2>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <section className="bg-white rounded-2xl p-6 space-y-3">
-                    <h3 className="font-bold">Customer categories</h3>
-                    <p className="text-sm text-gray-500">Set available customer categories, one per line. Removing a choice leaves existing customer records unchanged.</p>
+                    <h3 className="font-bold flex items-center gap-2">Customer categories <InfoTooltip label="Customer category information">Enter one category per line. Removing a choice leaves existing records unchanged. Use Save Settings below to save.</InfoTooltip></h3>
                     <textarea aria-label="Customer categories" rows={5} className={inputClass} value={(formData.customerCategories || []).join('\n')} onChange={e => setFormData({ ...formData, customerCategories: e.target.value.split('\n') })} />
-                    <p className="text-sm">Use Save Settings below to save your categories.</p>
                 </section>
                 <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

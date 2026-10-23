@@ -1,3 +1,4 @@
+import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Sale, InventoryItem, Customer, User, SaleItem, StockItem, PricingTier, Payment, SystemSettings, Quotation } from '../types';
@@ -740,15 +741,8 @@ const SalesView: React.FC<SalesViewProps> = ({
         }
     };
 
-    const isLoggable = (sale: Sale) => {
-        if (sale.usageLogged) return false;
-        return sale.items.some(item =>
-            item.name.toLowerCase().includes('print') ||
-            item.name.toLowerCase().includes('roll') ||
-            item.name.toLowerCase().includes('dtf') ||
-            item.name.toLowerCase().includes('banner')
-        );
-    };
+    const isLoggable = (_sale: Sale) => false; // Costs are recorded by Start or unopened resale.
+
 
     const filteredSales = useMemo(() => {
         let list = sales;
@@ -1571,17 +1565,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Job Narration / Workflow Notes</label>
+                        <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Job Narration / Workflow Notes <InfoTooltip label="Workflow notes information">These notes are internal and are not printed on customer receipts or invoices.</InfoTooltip></label>
                         <textarea
                             value={editedNarration}
                             onChange={e => setEditedNarration(e.target.value)}
                             className="w-full p-5 border-2 border-gray-100 rounded-[2rem] text-sm font-bold text-gray-900 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none min-h-[160px] resize-none shadow-inner"
                             placeholder="Document specific client requests, production steps, or machine settings here..."
                         />
-                        <div className="mt-4 flex items-start gap-3 bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
-                            <div className="p-1.5 bg-yellow-400 rounded-lg shrink-0 mt-0.5"><BeakerIcon className="w-3.5 h-3.5 text-gray-900" /></div>
-                            <p className="text-[10px] text-yellow-800 font-bold leading-relaxed uppercase tracking-tight">Disclaimer: These notes are strictly for the internal team. They will not be printed on receipts or invoices sent to clients.</p>
-                        </div>
                     </div>
                     <button
                         onClick={handleSaveNarration}

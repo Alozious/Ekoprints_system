@@ -1,11 +1,19 @@
+import { statementHtml } from '../statementExport';
+import type { StatementOptions } from '../statementExport';
+import Modal from './Modal';
+import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line, Sector } from 'recharts';
-import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord, SystemSettings } from '../types';
+import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord, SystemSettings, StockTransaction } from '../types';
+import { allocatedSale, businessDay, inPeriod, inventoryValuation, moduleShare, profitSummary, saleDepartment } from '../reportAccounting';
+import { department } from '../stockMath';
+import type { DepartmentFilter } from '../reportAccounting';
 import { CalendarIcon, PrintIcon, BanknotesIcon as BankIcon } from './icons';
 
 interface ReportsViewProps {
     sales: Sale[];
+    stockTransactions: StockTransaction[];
     expenses: Expense[];
     inventory: InventoryItem[];
     stockItems: StockItem[];
@@ -18,181 +26,39 @@ interface ReportsViewProps {
 }
 
 type ReportPeriod = 'all' | 'year' | 'month' | 'today' | 'yesterday' | 'custom';
-type ModuleFilter = 'all' | 'largeformat' | 'dtf' | 'embroidery' | 'bizhub' | 'supplies' | 'products';
+type ModuleFilter = DepartmentFilter;
 
 const formatUGX = (amount: number) => {
     if (typeof amount !== 'number' || isNaN(amount)) return '0 UGX';
     return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' UGX';
 };
 
-const ROLL_LENGTH_METERS = 50;
 
-const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, settings, customers = [] }) => {
+
+const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, stockTransactions = [], inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, settings, customers = [] }) => {
     const isBankerOnly = currentUser.role === 'user' && currentUser.isBanker;
     const [period, setPeriod] = useState<ReportPeriod>('today');
     const [showBankingModal, setShowBankingModal] = useState(false);
+    const [showStatementModal, setShowStatementModal] = useState(false);
+    const [statementPeriod, setStatementPeriod] = useState<ReportPeriod>('today');
+    const [statementStart, setStatementStart] = useState(businessDay(new Date()));
+    const [statementEnd, setStatementEnd] = useState(businessDay(new Date()));
+    const [statementOptions, setStatementOptions] = useState<StatementOptions>({ grouping:'daily', cashFlow:['Cash from yesterday','Money banked','Money in safe'], cards:['Total invoiced','Cash collected','Outstanding debts','Cost of goods (COGS)','Gross profit','Operating expenses','Net profit','Inventory value','Net cash flow'], particulars:['Invoices','Payments','Expenses','COGS','Stock movements','Bank deposits'] });
     const [bankingAmount, setBankingAmount] = useState('');
     const [activeModule, setActiveModule] = useState<ModuleFilter>('all');
     const [dateMode, setDateMode] = useState<'specific' | 'range'>('specific');
-    const [customDateStart, setCustomDateStart] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [customDateEnd, setCustomDateEnd] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [customDateStart, setCustomDateStart] = useState<string>(businessDay(new Date()));
+    const [customDateEnd, setCustomDateEnd] = useState<string>(businessDay(new Date()));
 
-    const moduleKeywords: Record<ModuleFilter, string[]> = {
-        all: [],
-        largeformat: ['print', 'banner', 'vinyl', 'flex', 'stickers', 'rollup'],
-        dtf: ['dtf', 'direct to film'],
-        embroidery: ['embroidery', 'uniform', 'cap', 'polo', 'shirt', 'thread'],
-        bizhub: ['bizhub', 'photocopy', 'card', 'flyer', 'poster', 'paper', 'toner'],
-        supplies: ['ink', 'powder', 'solution', 'clean', 'toner'],
-        products: ['jumper', 'hoodie', 't-shirt', 'bottle', 'mug'],
-    };
-
-    const filteredData = useMemo(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const todayString = now.toDateString();
-
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const yesterdayString = yesterday.toDateString();
-
-        const checkModuleMatch = (itemName: string) => {
-            if (activeModule === 'all') return true;
-            const keywords = moduleKeywords[activeModule];
-            const lowerName = itemName.toLowerCase();
-            return keywords.some(k => lowerName.includes(k));
-        };
-
-        const filterByPeriodAndModule = (salesList: Sale[], expensesList: Expense[]) => {
-            let filteredSales = salesList;
-            let filteredExpenses = expensesList;
-
-            if (period !== 'all') {
-                filteredSales = filteredSales.filter(s => {
-                    const itemDate = new Date(s.date);
-                    if (period === 'year') return itemDate.getFullYear() === currentYear;
-                    if (period === 'month') return itemDate.getFullYear() === currentYear && itemDate.getMonth() === currentMonth;
-                    if (period === 'today') return itemDate.toDateString() === todayString;
-                    if (period === 'yesterday') return itemDate.toDateString() === yesterdayString;
-                    if (period === 'custom') {
-                        if (dateMode === 'specific') return itemDate.toDateString() === new Date(customDateStart).toDateString();
-                        const start = new Date(customDateStart);
-                        start.setHours(0, 0, 0, 0);
-                        const end = new Date(customDateEnd);
-                        end.setHours(23, 59, 59, 999);
-                        return itemDate >= start && itemDate <= end;
-                    }
-                    return true;
-                });
-                filteredExpenses = filteredExpenses.filter(e => {
-                    const itemDate = new Date(e.date);
-                    if (period === 'year') return itemDate.getFullYear() === currentYear;
-                    if (period === 'month') return itemDate.getFullYear() === currentYear && itemDate.getMonth() === currentMonth;
-                    if (period === 'today') return itemDate.toDateString() === todayString;
-                    if (period === 'yesterday') return itemDate.toDateString() === yesterdayString;
-                    if (period === 'custom') {
-                        if (dateMode === 'specific') return itemDate.toDateString() === new Date(customDateStart).toDateString();
-                        const start = new Date(customDateStart);
-                        start.setHours(0, 0, 0, 0);
-                        const end = new Date(customDateEnd);
-                        end.setHours(23, 59, 59, 999);
-                        return itemDate >= start && itemDate <= end;
-                    }
-                    return true;
-                });
-            }
-
-            if (activeModule !== 'all') {
-                filteredSales = filteredSales.map(sale => {
-                    const matchedItems = sale.items.filter(item => checkModuleMatch(item.name));
-                    if (matchedItems.length === 0) return null as any;
-                    return {
-                        ...sale,
-                        items: matchedItems,
-                        total: matchedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-                    };
-                }).filter(Boolean);
-
-                filteredExpenses = filteredExpenses.filter(exp => {
-                    const catLower = exp.category.toLowerCase();
-                    const descLower = exp.description.toLowerCase();
-                    const keywords = moduleKeywords[activeModule];
-                    return keywords.some(k => catLower.includes(k) || descLower.includes(k));
-                });
-            }
-
-            return { sales: filteredSales, expenses: filteredExpenses };
-        };
-
-        return filterByPeriodAndModule(sales, expenses);
-    }, [sales, expenses, period, activeModule, dateMode, customDateStart, customDateEnd]);
-
-    const cashReceived = useMemo(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const todayString = now.toDateString();
-
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const yesterdayString = yesterday.toDateString();
-
-        let total = 0;
-
-        sales.forEach(sale => {
-            if (activeModule !== 'all') {
-                const keywords = moduleKeywords[activeModule];
-                const hasModuleItem = sale.items.some(item => {
-                    const lowerName = item.name.toLowerCase();
-                    return keywords.some(k => lowerName.includes(k));
-                });
-                if (!hasModuleItem) return;
-            }
-
-            if (sale.payments && sale.payments.length > 0) {
-                sale.payments.forEach(payment => {
-                    const pDate = new Date(payment.date);
-                    let match = false;
-                    if (period === 'all') match = true;
-                    else if (period === 'year') match = pDate.getFullYear() === currentYear;
-                    else if (period === 'month') match = pDate.getFullYear() === currentYear && pDate.getMonth() === currentMonth;
-                    else if (period === 'today') match = pDate.toDateString() === todayString;
-                    else if (period === 'yesterday') match = pDate.toDateString() === yesterdayString;
-                    else if (period === 'custom') {
-                        if (dateMode === 'specific') match = pDate.toDateString() === new Date(customDateStart).toDateString();
-                        else {
-                            const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
-                            const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
-                            match = pDate >= start && pDate <= end;
-                        }
-                    }
-
-                    if (match) total += payment.amount;
-                });
-            } else {
-                // Fallback for legacy records if they lack payments array but have amountPaid
-                const sDate = new Date(sale.date);
-                let match = false;
-                if (period === 'all') match = true;
-                else if (period === 'year') match = sDate.getFullYear() === currentYear;
-                else if (period === 'month') match = sDate.getFullYear() === currentYear && sDate.getMonth() === currentMonth;
-                else if (period === 'today') match = sDate.toDateString() === todayString;
-                else if (period === 'yesterday') match = sDate.toDateString() === yesterdayString;
-                else if (period === 'custom') {
-                    if (dateMode === 'specific') match = sDate.toDateString() === new Date(customDateStart).toDateString();
-                    else {
-                        const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
-                        const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
-                        match = sDate >= start && sDate <= end;
-                    }
-                }
-
-                if (match) total += (sale.amountPaid || 0);
-            }
-        });
-        return total;
-    }, [sales, period, activeModule, dateMode, customDateStart, customDateEnd]);
+    const accountingFilter = { period, dateMode, start: customDateStart, end: customDateEnd };
+    const filteredData = useMemo(() => ({
+        sales: sales.filter(s => !s.voidedAt && inPeriod(s.date, accountingFilter) && (activeModule === 'all' || s.items.some(i => saleDepartment(i) === activeModule))).map(s => allocatedSale(s, activeModule)),
+        expenses: expenses.filter(e => inPeriod(e.date, accountingFilter) && (activeModule === 'all' || department(e.module) === activeModule)),
+    }), [sales, expenses, period, activeModule, dateMode, customDateStart, customDateEnd]);
+    const financials = useMemo(() => profitSummary(sales, expenses, stockTransactions, accountingFilter, activeModule),
+        [sales, expenses, stockTransactions, period, activeModule, dateMode, customDateStart, customDateEnd]);
+    const cashReceived = financials.cashCollected;
+    const filteredBanked = bankingRecords.filter(r => inPeriod(r.date, accountingFilter)).reduce((sum,r)=>sum+r.amount,0);
 
     const bankingSummary = useMemo(() => {
         if (!currentUser.isBanker && currentUser.role !== 'admin') return null;
@@ -274,47 +140,25 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     const totalExpenses = bankingSummary?.totalExpensesCash || 0;
     const netCashFlow = totalCashCollected - totalExpenses;
 
-    const inventoryReportItems = useMemo(() => {
-        const results: { name: string, stock: string, price: number, total: number }[] = [];
-
-        // Stock Items (Meter-based)
-        stockItems.forEach(item => {
-            const cat = materialCategories.find(c => c.id === item.categoryId);
-            const catName = cat ? cat.name.toLowerCase() : '';
-            const keywords = activeModule === 'all' ? [] : moduleKeywords[activeModule];
-
-            if (activeModule === 'all' || keywords.some(k => catName.includes(k) || item.itemName.toLowerCase().includes(k))) {
-                const rolls = (item.totalStockMeters || 0) / ROLL_LENGTH_METERS;
-                const value = rolls * item.lastPurchasePricePerRoll_UGX;
-                results.push({
-                    name: item.itemName,
-                    stock: `${(item.totalStockMeters || 0).toFixed(1)}m`,
-                    price: item.lastPurchasePricePerRoll_UGX,
-                    total: value
-                });
-            }
-        });
-
-        // Inventory Items (Unit-based)
-        inventory.forEach(item => {
-            const keywords = activeModule === 'all' ? [] : moduleKeywords[activeModule];
-            if (activeModule === 'all' || keywords.some(k => item.category.toLowerCase().includes(k) || item.name.toLowerCase().includes(k))) {
-                const value = item.quantity * (item.purchasePrice || 0);
-                results.push({
-                    name: item.name,
-                    stock: `${item.quantity} units`,
-                    price: item.purchasePrice || 0,
-                    total: value
-                });
-            }
-        });
-
-        return results;
-    }, [stockItems, inventory, activeModule, materialCategories]);
-
-    const totalInventoryValue = useMemo(() => {
-        return inventoryReportItems.reduce((sum, item) => sum + item.total, 0);
-    }, [inventoryReportItems]);
+    const valuation = useMemo(() => inventoryValuation(stockItems, inventory, stockTransactions, accountingFilter, activeModule),
+        [stockItems, inventory, stockTransactions, period, activeModule, dateMode, customDateStart, customDateEnd]);
+    const inventoryReportItems = valuation.rows.map(row => ({ name: row.name, stock: `${row.units} ${row.unit}`, price: row.cost, total: row.value }));
+    const totalInventoryValue = valuation.value;
+    const outstandingDebts = filteredData.sales.reduce((sum, sale) => sum + Math.max(0, sale.total - (sale.amountPaid || 0)), 0);
+    const financialCards: { label: string; value: number; tone: string; unavailable?: boolean }[] = [
+        { label: 'Total invoiced', value: totalInvoiced, tone: 'text-gray-900' },
+        { label: 'Cash collected', value: financials.cashCollected, tone: 'text-emerald-600' },
+        { label: 'Outstanding debts', value: outstandingDebts, tone: 'text-rose-700' },
+        ...(currentUser.role === 'admin' ? [
+            { label: 'Cost of goods (COGS)', value: financials.cogs, tone: 'text-amber-700' },
+            { label: 'Gross profit', value: financials.grossProfit, tone: 'text-emerald-700' },
+        ] : []),
+        { label: 'Operating expenses', value: financials.operatingExpenses, tone: 'text-rose-600' },
+        ...(currentUser.role === 'admin' ? [
+            { label: 'Net profit', value: financials.netProfit, tone: 'text-blue-700' },
+            { label: 'Inventory value', value: totalInventoryValue, tone: 'text-indigo-700', unavailable: valuation.missingItems > 0 && valuation.rows.length === 0 },
+        ] : [{ label: 'Net cash flow', value: netCashFlow, tone: 'text-blue-600' }]),
+    ];
 
     const topSellingItems = useMemo(() => {
         const itemSales: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
@@ -422,240 +266,58 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
     const periodsToDisplay: ReportPeriod[] = isBankerOnly ? ['today', 'yesterday'] : ['today', 'month', 'year', 'all', 'custom'];
 
     const handleGenerateStatement = () => {
-        const transactions: { date: Date, type: 'income' | 'expense' | 'banking', mainDetail: string, subDetail: string, amount: number, ref: string }[] = [];
-
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const todayString = now.toDateString();
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const yesterdayString = yesterday.toDateString();
-
-        // Determine Start Date for Opening Balance calculation
-        let startDate: Date;
-        if (period === 'today') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        } else if (period === 'yesterday') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        } else if (period === 'month') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        } else if (period === 'year') {
-            startDate = new Date(now.getFullYear(), 0, 1);
-        } else if (period === 'custom') {
-            startDate = new Date(customDateStart); startDate.setHours(0, 0, 0, 0);
-        } else {
-            startDate = new Date(0);
-        }
-
-        const calculateBalanceBefore = (date: Date) => {
-            let inc = sales.reduce((sum, s) => {
-                const pams = s.payments || [];
-                if (pams.length > 0) {
-                    return sum + pams.reduce((pSum, p) => new Date(p.date) < date ? pSum + p.amount : pSum, 0);
-                }
-                return new Date(s.date) < date ? sum + (s.amountPaid || 0) : sum;
-            }, 0);
-            let exp = expenses.filter(e => new Date(e.date) < date).reduce((sum, e) => sum + e.amount, 0);
-            let bnk = bankingRecords.filter(r => new Date(r.date) < date).reduce((sum, r) => sum + r.amount, 0);
-            return inc - exp - bnk;
-        };
-
-        const openingSafeBalance = calculateBalanceBefore(startDate);
-
-        // 1. Process Sales (Payments)
-        sales.forEach(sale => {
-            if (activeModule !== 'all') {
-                const keywords = moduleKeywords[activeModule];
-                const hasModuleItem = sale.items.some(item => {
-                    const lowerName = item.name.toLowerCase();
-                    return keywords.some(k => lowerName.includes(k));
-                });
-                if (!hasModuleItem) return;
-            }
-
-            const customer = customers.find(c => c.id === sale.customerId);
-            const customerName = customer ? customer.name : 'Guest / Walk-in';
-            const productsList = sale.items.map(i => `${i.name} (x${i.quantity})`).join(', ');
-
-            const processPayment = (dateStr: string, amount: number, desc: string) => {
-                const pDate = new Date(dateStr);
-                let match = false;
-                if (period === 'all') match = true;
-                else if (period === 'year') match = pDate.getFullYear() === currentYear;
-                else if (period === 'month') match = pDate.getFullYear() === currentYear && pDate.getMonth() === currentMonth;
-                else if (period === 'today') match = pDate.toDateString() === todayString;
-                else if (period === 'yesterday') match = pDate.toDateString() === yesterdayString;
-                else if (period === 'custom') {
-                    if (dateMode === 'specific') match = pDate.toDateString() === new Date(customDateStart).toDateString();
-                    else {
-                        const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
-                        const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
-                        match = pDate >= start && pDate <= end;
-                    }
-                }
-
-                if (match) {
-                    transactions.push({
-                        date: pDate,
-                        type: 'income',
-                        mainDetail: customerName,
-                        subDetail: productsList,
-                        amount: amount,
-                        ref: sale.id.substring(0, 8).toUpperCase()
-                    });
-                }
-            };
-
-            if (sale.payments && sale.payments.length > 0) {
-                sale.payments.forEach(p => processPayment(p.date, p.amount, `Payment: Invoice #${sale.id.substring(0, 8).toUpperCase()}`));
-            } else {
-                processPayment(sale.date, sale.amountPaid || 0, `Legacy Sale #${sale.id.substring(0, 8).toUpperCase()}`);
-            }
-        });
-
-        // 2. Process Expenses
-        expenses.forEach(exp => {
-            const expDate = new Date(exp.date);
-            let match = false;
-            if (period === 'all') match = true;
-            else if (period === 'year') match = expDate.getFullYear() === currentYear;
-            else if (period === 'month') match = expDate.getFullYear() === currentYear && expDate.getMonth() === currentMonth;
-            else if (period === 'today') match = expDate.toDateString() === todayString;
-            else if (period === 'yesterday') match = expDate.toDateString() === yesterdayString;
-            else if (period === 'custom') {
-                if (dateMode === 'specific') match = expDate.toDateString() === new Date(customDateStart).toDateString();
-                else {
-                    const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
-                    const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
-                    match = expDate >= start && expDate <= end;
-                }
-            }
-
-            if (match) {
-                transactions.push({
-                    date: expDate,
-                    type: 'expense',
-                    mainDetail: exp.category,
-                    subDetail: exp.description,
-                    amount: exp.amount,
-                    ref: 'EXP'
-                });
-            }
-        });
-
-        // 3. Process Banking Records
-        bankingRecords.forEach(record => {
-            const rDate = new Date(record.date);
-            let match = false;
-            if (period === 'all') match = true;
-            else if (period === 'year') match = rDate.getFullYear() === currentYear;
-            else if (period === 'month') match = rDate.getFullYear() === currentYear && rDate.getMonth() === currentMonth;
-            else if (period === 'today') match = rDate.toDateString() === todayString;
-            else if (period === 'yesterday') match = rDate.toDateString() === yesterdayString;
-            else if (period === 'custom') {
-                if (dateMode === 'specific') match = rDate.toDateString() === new Date(customDateStart).toDateString();
-                else {
-                    const start = new Date(customDateStart); start.setHours(0, 0, 0, 0);
-                    const end = new Date(customDateEnd); end.setHours(23, 59, 59, 999);
-                    match = rDate >= start && rDate <= end;
-                }
-            }
-
-            if (match) {
-                transactions.push({
-                    date: rDate,
-                    type: 'banking',
-                    mainDetail: 'Bank Deposit',
-                    subDetail: `Recorded by ${record.userName || 'System'}`,
-                    amount: record.amount,
-                    ref: 'BANK'
-                });
-            }
-        });
-
-        transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-        const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-        const totalBanked = transactions.filter(t => t.type === 'banking').reduce((sum, t) => sum + t.amount, 0);
-
-        let currentRunningSafe = openingSafeBalance;
-
-        const html = `
-            <html>
-            <head>
-                <title>Statement of Accounts - ${settings.businessName}</title>
-                <style>
-                    body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; }
-                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; white-space: pre-wrap; }
-                    .logo { font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
-                    .meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 12px; background: #f9fafb; padding: 15px; border-radius: 8px; white-space: normal; }
-                    .summary { display: flex; gap: 20px; margin-bottom: 30px; }
-                    .card { flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 8px; text-align: center; }
-                    .card h4 { margin: 0 0 5px 0; font-size: 10px; text-transform: uppercase; color: #888; }
-                    .card p { margin: 0; font-size: 18px; font-weight: 900; }
-                    table { width: 100%; border-collapse: collapse; font-size: 10px; }
-                    th { text-align: left; border-bottom: 2px solid #333; padding: 10px 5px; text-transform: uppercase; }
-                    td { border-bottom: 1px solid #eee; padding: 10px 5px; }
-                    .text-right { text-align: right; }
-                    .income { color: #10b981; } .expense { color: #ef4444; } .banking { color: #3b82f6; }
-                    .safe-col { background: #fdfdfd; font-weight: 900; border-left: 1px solid #eee; }
-                </style>
-            </head>
-            <body>
-                <div class="header"><div class="logo">${settings.statementHeader}</div><div>Statement of Accounts</div></div>
-                <div class="meta">
-                    <div><strong>Period:</strong> ${getPeriodLabel()}<br><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
-                    <div style="text-align:right"><strong>User:</strong> ${currentUser.username}<br><strong>Opening Safe Balance:</strong> ${formatUGX(openingSafeBalance)}</div>
-                </div>
-                <div class="summary">
-                    <div class="card"><h4>Total Income</h4><p class="income">${formatUGX(totalIncome)}</p></div>
-                    <div class="card"><h4>Total Expenses</h4><p class="expense">${formatUGX(totalExpense)}</p></div>
-                    <div class="card"><h4>Total Banked</h4><p class="banking">${formatUGX(totalBanked)}</p></div>
-                    <div class="card"><h4>Closing Safe Balance</h4><p style="color:#1a2232">${formatUGX(openingSafeBalance + totalIncome - totalExpense - totalBanked)}</p></div>
-                </div>
-                <table>
-                    <thead><tr><th>Date</th><th>Transaction Details</th><th>Ref</th><th class="text-right">Income</th><th class="text-right">Expense</th><th class="text-right">Banked</th><th class="text-right safe-col">Safe Balance</th></tr></thead>
-                    <tbody>
-                        ${transactions.map(t => {
-            if (t.type === 'income') currentRunningSafe += t.amount;
-            else if (t.type === 'expense') currentRunningSafe -= t.amount;
-            else if (t.type === 'banking') currentRunningSafe -= t.amount;
-
-            return `<tr>
-                                <td>${t.date.toLocaleDateString()}</td>
-                                <td><div style="font-weight:bold;margin-bottom:2px">${t.mainDetail}</div><div style="font-size:10px;color:#666;line-height:1.3">${t.subDetail}</div></td>
-                                <td>${t.ref}</td>
-                                <td class="text-right income">${t.type === 'income' ? formatUGX(t.amount) : '-'}</td>
-                                <td class="text-right expense">${t.type === 'expense' ? formatUGX(t.amount) : '-'}</td>
-                                <td class="text-right banking">${t.type === 'banking' ? formatUGX(t.amount) : '-'}</td>
-                                <td class="text-right safe-col">${formatUGX(currentRunningSafe)}</td>
-                            </tr>`;
-        }).join('')}
-                        ${transactions.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:20px">No transactions found</td></tr>' : ''}
-                    </tbody>
-                </table>
-                <div style="margin-top:40px; text-align:center; font-size:12px; color:#666; white-space: pre-wrap;">
-                    ${settings.statementFooter}
-                </div>
-            </body>
-            </html>
-        `;
+        if (statementPeriod === 'custom' && (!statementStart || !statementEnd || statementStart > statementEnd)) return;
+        const html = statementHtml({ sales, expenses, stockTransactions, inventory, stockItems, customers, bankingRecords,
+            filter: { period:statementPeriod,dateMode:'range',start:statementStart,end:statementEnd }, module: activeModule, admin: currentUser.role === 'admin', options:statementOptions,
+            businessName: settings.businessName, header: settings.statementHeader, footer: settings.statementFooter,
+            userName: currentUser.username, periodLabel: statementPeriod === 'custom' ? `${statementStart} to ${statementEnd}` : ({today:'Today',month:'This month',year:'This year',all:'All time',yesterday:'Yesterday'}[statementPeriod] || statementPeriod) });
 
         const win = window.open('', '_blank', 'width=900,height=900');
-        if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); }
+        if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); setShowStatementModal(false); }
     };
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
+            <Modal isOpen={showStatementModal} onClose={()=>setShowStatementModal(false)} title="Statement options" size="lg">
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label className="text-sm font-bold">Arrange transactions
+                            <select className="block w-full border rounded-xl p-3 mt-2" value={statementOptions.grouping} onChange={e=>setStatementOptions({...statementOptions,grouping:e.target.value as StatementOptions['grouping']})}>
+                                <option value="daily">Daily</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                            </select>
+                        </label>
+                        <label className="text-sm font-bold">Timeframe
+                            <select className="block w-full border rounded-xl p-3 mt-2" value={statementPeriod} onChange={e=>setStatementPeriod(e.target.value as ReportPeriod)}>
+                                <option value="today">Today</option><option value="month">This month</option><option value="year">This year</option><option value="all">All years / All time</option><option value="custom">Custom range</option>
+                            </select>
+                        </label>
+                    </div>
+                    {statementPeriod==='custom' && <div className="grid grid-cols-2 gap-4">
+                        <label className="text-sm font-bold">From<input className="block w-full border rounded-xl p-3 mt-2" type="date" value={statementStart} onChange={e=>setStatementStart(e.target.value)}/></label>
+                        <label className="text-sm font-bold">To<input className="block w-full border rounded-xl p-3 mt-2" type="date" value={statementEnd} min={statementStart} onChange={e=>setStatementEnd(e.target.value)}/></label>
+                    </div>}
+                    {([
+                        {key:'cashFlow' as const,title:'Cash-flow fields',choices:['Cash from yesterday','Money banked','Money in safe']},
+                        {key:'cards' as const,title:'Summary columns',choices:financialCards.map(c=>c.label)},
+                        {key:'particulars' as const,title:'Transaction particulars',choices:['Invoices','Payments','Expenses',...(currentUser.role==='admin'?['COGS','Stock movements']:[]),'Bank deposits']},
+                    ]).map(section=><fieldset key={section.key} className="border rounded-2xl p-4" disabled={section.key==='cashFlow'&&activeModule!=='all'}>
+                        <legend className="px-2 text-sm font-black">{section.title}</legend>
+                        {section.key==='cashFlow'&&activeModule!=='all'&&<p className="text-sm text-gray-500 mb-3">Select All departments to include business-wide cash-flow balances.</p>}
+                        <div className="flex gap-4 mb-3 text-xs font-bold"><button type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:section.choices})}>Select all</button><button type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:[]})}>Clear</button></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{section.choices.map(choice=><label key={choice} className="flex gap-2 items-center text-sm"><input type="checkbox" checked={statementOptions[section.key].includes(choice)} onChange={e=>setStatementOptions({...statementOptions,[section.key]:e.target.checked?[...statementOptions[section.key],choice]:statementOptions[section.key].filter(v=>v!==choice)})}/>{choice}</label>)}</div>
+                    </fieldset>)}
+                    <p className="text-xs text-gray-500">Selected fields become table columns. Each day, month or year has one summary row, followed by its selected transaction particulars. Choosing no particulars creates a summary-only table. Statements print on A4 landscape. Cash-flow balances use the whole business.</p>
+                    {statementPeriod==='custom'&&(!statementStart||!statementEnd||statementStart>statementEnd)&&<p role="alert" className="text-red-600 text-sm">Choose a valid start and end date.</p>}
+                    <button className="w-full bg-gray-900 text-yellow-400 font-black rounded-xl p-3 disabled:opacity-40" disabled={statementPeriod==='custom'&&(!statementStart||!statementEnd||statementStart>statementEnd)} onClick={handleGenerateStatement}>Generate statement</button>
+                </div>
+            </Modal>
 
             {/* 1. Merged header bar */}
             <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">
                     Business Reports: <span className="text-yellow-500">{getPeriodLabel()}</span>
                 </span>
-                <div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
+                <InfoTooltip label="Report calculations and information"><p>The financial cards follow the selected dates and department. Cash collected follows payment dates. Outstanding debts are the current unpaid balances of invoices issued in the selected dates and department; overpayments on other invoices do not reduce these debts. The cash safe banner shows today's cash across the entire business.</p>{currentUser.role === 'admin' && <><p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock adjustments. COGS includes started materials and resale costs. Purchases and opening balances are excluded. Stock losses reduce profit; gains add.</p><p>Inventory closing date: {valuation.closingDay}.</p>{financials.missingCogs > 0 && <p>{financials.missingCogs} historical sale lines lack COGS; profit is provisional.</p>}{valuation.missingItems > 0 && <p>{valuation.missingItems} stock records lack usable cost/opening history and are excluded from valuation.</p>}</>}</InfoTooltip><div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
 
                 {/* Period pills */}
                 <div className="flex bg-gray-100 p-0.5 rounded-xl overflow-x-auto scrollbar-hide gap-0.5">
@@ -676,12 +338,12 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                             <option value="specific">Specific</option>
                             <option value="range">Range</option>
                         </select>
-                        <input type="date" value={customDateStart} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomDateStart(e.target.value); if (dateMode === 'specific') setCustomDateEnd(e.target.value); }}
+                        <input aria-label="Report start date" type="date" value={customDateStart} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomDateStart(e.target.value); if (dateMode === 'specific') setCustomDateEnd(e.target.value); }}
                             className="h-[30px] rounded-lg border-none bg-[#374151] px-2 text-[9px] font-bold text-blue-300 outline-none focus:ring-2 focus:ring-yellow-400" />
                         {dateMode === 'range' && (
                             <>
                                 <span className="text-gray-300 text-[9px] font-black">—</span>
-                                <input type="date" value={customDateEnd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDateEnd(e.target.value)}
+                                <input aria-label="Report end date" type="date" value={customDateEnd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDateEnd(e.target.value)}
                                     className="h-[30px] rounded-lg border-none bg-[#374151] px-2 text-[9px] font-bold text-blue-300 outline-none focus:ring-2 focus:ring-yellow-400" />
                             </>
                         )}
@@ -692,20 +354,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
 
                 {/* Module pills */}
                 <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-                    {(['all', 'largeformat', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products'] as ModuleFilter[]).map(mod => (
+                    {(['all', 'large-format', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products', 'Unassigned'] as ModuleFilter[]).map(mod => (
                         <button key={mod} onClick={() => setActiveModule(mod)}
                             className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeModule === mod ? 'bg-[#1a2232] text-yellow-400 shadow' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-700'}`}>
-                            {mod === 'all' ? 'All' : mod === 'largeformat' ? 'LF' : mod.toUpperCase()}
+                            {mod === 'all' ? 'All' : mod === 'large-format' ? 'LF' : mod.toUpperCase()}
                         </button>
                     ))}
                 </div>
 
                 <div className="ml-auto">
-                    <button onClick={handleGenerateStatement} className="flex items-center bg-[#1A2232] text-yellow-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap border border-yellow-400/20">
+                    <button onClick={() => {setStatementPeriod(period);setStatementStart(customDateStart);setStatementEnd(customDateEnd);setShowStatementModal(true);}} className="flex items-center bg-[#1A2232] text-yellow-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap border border-yellow-400/20">
                         <PrintIcon className="w-3.5 h-3.5 mr-1" /> Statement
                     </button>
                 </div>
             </div>
+
 
             {/* 2. High-Contrast Cash Flow Banner */}
             {bankingSummary && (
@@ -717,25 +380,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-sm font-black uppercase tracking-tight flex items-center">
                                 <div className="w-1 h-4 bg-yellow-400 mr-2.5 rounded-full shadow-[0_0_15px_rgba(251,191,36,0.5)]"></div>
-                                {getBankingTitle()}
+                                Cash Flow
                             </h2>
                             <span className="text-[9px] bg-yellow-400 text-gray-900 px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg">
-                                {getPeriodLabel()}
+                                Banking · {getPeriodLabel()}
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all">
                                 <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Cash From Yesterday</p>
                                 <p className="text-lg font-black text-blue-400 tracking-tight">{formatUGX(safeBalance.safeYesterday)}</p>
                             </div>
                             <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all">
-                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Cash Collected (Today)</p>
-                                <p className="text-lg font-black text-emerald-400 tracking-tight">{formatUGX(safeBalance.cashToday)}</p>
-                            </div>
-                            <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-all relative">
-                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Daily Expenses</p>
-                                <p className="text-lg font-black text-rose-400 tracking-tight">{formatUGX(safeBalance.expensesToday)}</p>
+                                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest mb-1">Money Banked · {getPeriodLabel()}</p>
+                                <p className="text-lg font-black text-emerald-400 tracking-tight">{formatUGX(filteredBanked)}</p>
                             </div>
                             <div className="bg-white px-4 py-3 rounded-2xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform relative group/safe overflow-hidden">
                                 <div className="absolute top-0 right-0 p-2 opacity-0 group-hover/safe:opacity-100 transition-opacity">
@@ -755,32 +414,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                                 )}
                             </div>
                         </div>
-                        <p className="text-gray-500 text-[9px] mt-3 text-center italic font-bold uppercase tracking-widest opacity-60">
-                            * This summary represents total cash flow for the entire business for the selected period ({getPeriodLabel()}).
-                        </p>
+                        
                     </div>
                 </div>
             )}
 
-            {/* 3. Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-gray-900 transition-colors">Total Invoiced (Sales)</h3>
-                    <p className="text-lg font-black text-gray-900 tracking-tight">{formatUGX(totalInvoiced)}</p>
+            {/* One financial row, driven by the shared date and department filters. */}
+            <section aria-label="Filtered financial summary" className="space-y-2">
+                <div className={`grid grid-cols-2 sm:grid-cols-4 ${currentUser.role === 'admin' ? 'lg:grid-cols-8' : ''} gap-2`}>
+                    {financialCards.map(card => <div key={card.label} className={`min-w-0 px-2.5 py-3 rounded-2xl shadow-sm border ${card.label === 'Net profit' ? 'bg-blue-50 border-blue-100' : card.label === 'Gross profit' ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-gray-100'}`}>
+                        <h3 className="text-[9px] min-h-[36px] leading-tight font-black text-gray-500 uppercase tracking-wide">{card.label}</h3>
+                        <p className={`text-[clamp(11px,1.1vw,18px)] font-black tracking-tight tabular-nums whitespace-nowrap ${card.tone}`}>{card.unavailable ? 'No history' : formatUGX(card.value).replace(' UGX', '')}</p>
+                        <span className="text-[8px] font-bold text-gray-400">{card.unavailable ? 'Not available' : 'UGX'}</span>
+                    </div>)}
                 </div>
-                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-500 transition-colors">Cash Collected</h3>
-                    <p className="text-lg font-black text-emerald-600 tracking-tight">{formatUGX(totalCashCollected)}</p>
-                </div>
-                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-rose-500 transition-colors">Total Expenses</h3>
-                    <p className="text-lg font-black text-rose-600 tracking-tight">{formatUGX(totalExpenses)}</p>
-                </div>
-                <div className="bg-white px-4 py-3 rounded-[1.5rem] shadow-sm border border-gray-50 hover:shadow-md transition-shadow group">
-                    <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 group-hover:text-blue-500 transition-colors">Net Cash Flow</h3>
-                    <p className="text-lg font-black text-blue-600 tracking-tight">{formatUGX(netCashFlow)}</p>
-                </div>
-            </div>
+            </section>
 
             {/* 4. Sales & Expense Trend Chart */}
             <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
@@ -926,10 +574,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
             {/* 5. Inventory Valuation Section - Refined UI */}
             <div className="bg-[#f0f4f8] p-10 rounded-[3rem] shadow-2xl border border-white/50 relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-6 relative z-10">
-                    <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Materials Inventory Valuation (Current Snapshot)</h3>
+                    <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Inventory Valuation (Closing Balance)</h3>
                     <div className="bg-white px-8 py-5 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col items-center min-w-[200px] transform hover:scale-105 transition-transform">
                         <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Asset Value</span>
-                        <p className="text-3xl font-black text-[#1a2232] tracking-tighter leading-none">{formatUGX(totalInventoryValue)}</p>
+                        <p className="text-3xl font-black text-[#1a2232] tracking-tighter leading-none">{valuation.missingItems > 0 && valuation.rows.length === 0 ? 'History unavailable' : formatUGX(totalInventoryValue)}</p>
                     </div>
                 </div>
 
@@ -938,8 +586,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
                         <thead className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
                             <tr>
                                 <th className="px-6 py-4">Item Specification</th>
-                                <th className="px-6 py-4">Current Stock</th>
-                                <th className="px-6 py-4 text-right">Unit/Roll Price</th>
+                                <th className="px-6 py-4">Closing Stock</th>
+                                <th className="px-6 py-4 text-right">Average Unit Cost</th>
                                 <th className="px-6 py-4 text-right">Aggregate Value</th>
                             </tr>
                         </thead>
@@ -1025,3 +673,4 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, inventory, s
 };
 
 export default ReportsView;
+

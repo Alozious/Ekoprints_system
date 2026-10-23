@@ -1,3 +1,4 @@
+import InfoTooltip from './InfoTooltip';
 
 import React, { useState } from 'react';
 import { SearchIcon, BellIcon, ChevronDownIcon, LogoutIcon, MenuIcon } from './icons';
@@ -30,6 +31,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMen
                     </div>
                     
                     <div className="flex items-center space-x-4">
+<InfoTooltip label={`${pageTitle} information`}><p className="font-bold">{pageTitle}</p><p>Use page filters to choose dates and departments. Info icons beside headings contain guidance and calculations.</p>{/inventory/i.test(pageTitle) && <p>Materials show unopened units only. Receive stock adds units; starting a unit removes it from stock. Unopened materials can be resold.</p>}{/report|dashboard/i.test(pageTitle) && currentUser.role === 'admin' && <p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock adjustments. COGS includes started materials and resale costs. Stock losses reduce profit; gains add. Opening stock and purchases are not COGS.</p>}</InfoTooltip>
                          <div className="relative hidden md:block">
                             <input
                                 type="text"

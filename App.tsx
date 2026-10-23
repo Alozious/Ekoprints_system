@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardView from './components/DashboardView';
@@ -16,6 +16,7 @@ import CalculatorView from './components/CalculatorView';
 import SettingsView from './components/SettingsView';
 import ToastContainer from './components/Toast';
 import { InventoryItem, Sale, Expense, Customer, User, MaterialCategory, StockItem, StockTransaction, PricingTier, SaleItem, ExpenseCategory, ProductCategory, BankingRecord, SystemSettings, Quotation } from './types';
+import { createStockService } from './stockService';
 import { v4 as uuidv4 } from 'uuid';
 
 // Firebase
@@ -45,6 +46,7 @@ const App: React.FC = () => {
     }, [currentUser?.role]);
     const [appLoading, setAppLoading] = useState(true);
     const [operationLoading, setOperationLoading] = useState(false);
+    const saleSaveLock = useRef(false);
 
     // --- Data State ---
     const [users, setUsers] = useState<User[]>([]);
@@ -114,7 +116,7 @@ const App: React.FC = () => {
                 fetchData('stockItems').then(data => setStockItems((data as any[]).map(d => ({ ...d, skuId: d.skuId || d.id })))),
                 fetchData('stockTransactions').then(data => setStockTransactions((data as any[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('pricingTiers').then(data => setPricingTiers(data as any[])),
-                fetchData('sales').then(data => setSales((data as Sale[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
+                fetchData('sales').then(data => setSales((data as Sale[]).filter(s => !s.voidedAt).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenses').then(data => setExpenses((data as Expense[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
                 fetchData('expenseCategories').then(data => setExpenseCategories(data as ExpenseCategory[])),
                 fetchData('bankingRecords').then(data => setBankingRecords((data as BankingRecord[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))),
@@ -133,6 +135,19 @@ const App: React.FC = () => {
             setOperationLoading(false);
         }
     }, [currentUser, fetchData, addToast]);
+
+    const refreshInventoryData = useCallback(async () => {
+        // Refresh only inventory data; do not trigger unrelated migrations after a receipt.
+        const names = ['materialCategories', 'stockItems', 'stockTransactions', 'pricingTiers', 'inventory', 'productCategories'];
+        const results = await Promise.all(names.map(name => getDocs(collection(db, name))));
+        const rows = results.map(result => result.docs.map(snapshot => ({ ...snapshot.data(), id: snapshot.id })));
+        setMaterialCategories(rows[0].map(row => ({ ...row, name: (row as MaterialCategory).name || (row as { categoryName?: string }).categoryName || '' })) as MaterialCategory[]);
+        setStockItems(rows[1].map(row => ({ ...row, skuId: (row as StockItem).skuId || row.id })) as StockItem[]);
+        setStockTransactions((rows[2] as StockTransaction[]).sort((a, b) => b.date.localeCompare(a.date)));
+        setPricingTiers(rows[3] as PricingTier[]);
+        setInventory(rows[4] as InventoryItem[]);
+        setProductCategories(rows[5] as ProductCategory[]);
+    }, []);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -219,21 +234,19 @@ const App: React.FC = () => {
     }, [runAsyncOperation]);
 
     const handleAddSale = useCallback(async (saleData: Omit<Sale, 'id'>) => {
-        const result = await createDocument('sales', saleData, setSales, 'Sale created successfully.');
-        if (result) {
-            for (const item of saleData.items) {
-                let trueId = item.itemId;
-                if (trueId.startsWith('simple-')) {
-                    trueId = trueId.split('-')[1];
-                }
-                const invItem = inventory.find(i => i.id === trueId);
-                if (invItem) {
-                    const newQty = invItem.quantity - item.quantity;
-                    await updateDocument('inventory', invItem.id, { quantity: newQty }, setInventory, `Stock updated for ${item.name}`);
-                }
-            }
-        }
-    }, [inventory, createDocument, updateDocument]);
+        if (!currentUser) throw new Error('Sign in before saving a sale.');
+        if (saleSaveLock.current) throw new Error('A sale is already being saved.');
+        saleSaveLock.current = true;
+        setOperationLoading(true);
+        try {
+            const id = doc(collection(db, 'sales')).id;
+            const items = await createStockService(db, currentUser).saveSale(id, saleData);
+            setSales(previous => [{ ...saleData, id, items, inventoryVersion: 1 }, ...previous]);
+            addToast('Sale saved; stock and COGS recorded.', 'success');
+            try { await refreshInventoryData(); } catch { addToast('Sale saved. Reload to refresh stock.', 'info'); }
+        } catch (error) { addToast(error instanceof Error ? error.message : 'Sale failed.', 'error'); throw error; }
+        finally { saleSaveLock.current = false; setOperationLoading(false); }
+    }, [currentUser, refreshInventoryData, addToast]);
 
     const handleAddQuotation = useCallback(async (quoteData: Omit<Quotation, 'id'>) => {
         await createDocument('quotations', quoteData, setQuotations, 'Quotation created successfully.');
@@ -249,25 +262,28 @@ const App: React.FC = () => {
     }, [updateDocument]);
 
     const handleUpdateSale = useCallback(async (sale: Sale) => {
+        if (!currentUser) throw new Error('Sign in before updating a sale.');
         const { id, ...data } = sale;
-        await updateDocument('sales', id, data, setSales, 'Sale updated successfully.');
-    }, [updateDocument]);
+        try {
+            const items = await createStockService(db, currentUser).saveSale(id, data);
+            setSales(previous => previous.map(s => s.id === id ? { ...sale, items } : s));
+            try { await refreshInventoryData(); } catch { addToast('Updated. Reload to refresh stock.', 'info'); }
+        } catch (error) { addToast(error instanceof Error ? error.message : 'Update failed.', 'error'); throw error; }
+    }, [currentUser, refreshInventoryData, addToast]);
 
-    const handleStockOut = useCallback(async (skuId: string, metersUsed: number, jobId: string, notes: string) => {
-        const stockItem = stockItems.find(i => i.skuId === skuId);
-        if (!stockItem) return;
-        const transaction = {
-            transactionId: uuidv4(),
-            skuId,
-            transactionType: 'Stock-Out' as const,
-            quantityMeters: metersUsed,
-            date: new Date().toISOString(),
-            jobId,
-            notes
-        };
-        await createDocument('stockTransactions', transaction, setStockTransactions, 'Usage recorded.');
-        await updateDocument('stockItems', skuId, { totalStockMeters: stockItem.totalStockMeters - metersUsed }, setStockItems, 'Stock level updated.');
-    }, [stockItems, createDocument, updateDocument]);
+    const handleDeleteSale = useCallback(async (sale: Sale) => {
+        if (!currentUser) throw new Error('Sign in before voiding a sale.');
+        try {
+            await createStockService(db, currentUser).reverseSale(sale.id);
+            setSales(previous => previous.filter(s => s.id !== sale.id));
+            addToast('Sale voided; unopened stock restored through reversing entries.', 'success');
+            try { await refreshInventoryData(); } catch { addToast('Voided. Reload to refresh stock.', 'info'); }
+        } catch (error) { addToast(error instanceof Error ? error.message : 'Unable to void sale.', 'error'); throw error; }
+    }, [currentUser, refreshInventoryData, addToast]);
+
+    const handleStockOut = useCallback(async () => {
+        addToast('Use Start in Inventory for materials; services no longer deduct meters.', 'info');
+    }, [addToast]);
 
     const handleAddUser = useCallback(async (userData: Omit<User, 'id'> & { password?: string }) => {
         setOperationLoading(true);
@@ -321,11 +337,11 @@ const App: React.FC = () => {
                     <Header pageTitle={activeView} currentUser={currentUser} onLogout={handleLogout} onMenuClick={() => setIsSidebarOpen(true)} />
                     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F4F7F9] p-4 sm:p-6 lg:p-8">
                         {operationLoading && <div className="fixed inset-0 bg-black bg-opacity-20 z-50 flex items-center justify-center"><div className="bg-white p-4 rounded-lg shadow-lg flex items-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>Processing...</div></div>}
-                        {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
+                        {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} stockTransactions={stockTransactions} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView
                                 sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} quoteRules={quoteRules} quoteTax={quoteTax} isQuotationMode={isQuotationMode} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); setQuoteRules([]); setQuoteTax(0); setIsQuotationMode(false); }}
-                                onAddSale={handleAddSale} onDeleteSale={(sale) => deleteDocument('sales', sale.id, setSales, 'Sale deleted.')} onUpdateSale={handleUpdateSale}
+                                onAddSale={handleAddSale} onDeleteSale={handleDeleteSale} onUpdateSale={handleUpdateSale}
                                 onAddCustomer={(customerData) => createDocument('customers', { ...customerData, createdAt: new Date().toISOString() }, setCustomers, 'Customer added.')}
                                 stockItems={stockItems} pricingTiers={pricingTiers} onStockOut={handleStockOut}
                                 settings={settings} quotations={quotations} onAddQuotation={handleAddQuotation} onDeleteQuotation={handleDeleteQuotation} onUpdateQuotation={handleUpdateQuotation}
@@ -349,39 +365,16 @@ const App: React.FC = () => {
                         {activeView === 'Inventory' && (
                             <InventoryView
                                 materialCategories={materialCategories} stockItems={stockItems} stockTransactions={stockTransactions} pricingTiers={pricingTiers}
-                                onStockIn={async (skuId, rolls, price, notes) => {
-                                    const stockItem = stockItems.find(i => i.skuId === skuId);
-                                    if (!stockItem) return;
-                                    const metersToAdd = rolls * 50;
-                                    const transaction = { transactionId: uuidv4(), skuId, transactionType: 'Stock-In' as const, quantityMeters: metersToAdd, date: new Date().toISOString(), jobId: 'STOCK-IN', notes };
-                                    await createDocument('stockTransactions', transaction, setStockTransactions, 'Transaction recorded.');
-                                    await updateDocument('stockItems', skuId, { totalStockMeters: stockItem.totalStockMeters + metersToAdd, lastPurchasePricePerRoll_UGX: price }, setStockItems, 'Stock level updated.');
-                                }}
-                                onStockOut={handleStockOut}
-                                onAddCategory={(name, module) => createDocument('materialCategories', { name, isActive: true, module }, setMaterialCategories, 'Category created.')}
-                                onUpdateCategory={(id, name) => updateDocument('materialCategories', id, { name }, setMaterialCategories, 'Category updated.')}
-                                onToggleCategoryStatus={(id, currentStatus) => updateDocument('materialCategories', id, { isActive: !currentStatus }, setMaterialCategories, 'Status updated.')}
-                                onDeleteCategory={(cat) => deleteDocument('materialCategories', cat.id, setMaterialCategories, 'Category deleted.')}
-                                onAddStockItem={(categoryId, width, reorderLevel, itemName, module) => createDocument('stockItems', { categoryId, width, reorderLevel, itemName, module, totalStockMeters: 0, lastPurchasePricePerRoll_UGX: 0 }, setStockItems, 'SKU created.')}
-                                onUpdateStockItem={(id, reorderLevel) => updateDocument('stockItems', id, { reorderLevel }, setStockItems, 'SKU updated.')}
-                                onDeleteStockItem={(id) => deleteDocument('stockItems', id, setStockItems, 'SKU deleted.')}
-                                onAddTier={(name, value, categoryId) => createDocument('pricingTiers', { name, value, categoryId }, setPricingTiers, 'Tier created.')}
-                                onUpdateTier={(id, name, value) => updateDocument('pricingTiers', id, { name, value }, setPricingTiers, 'Tier updated.')}
-                                onDeleteTier={(id) => deleteDocument('pricingTiers', id, setPricingTiers, 'Tier deleted.')}
-                                inventory={inventory}
-                                onAddInventoryItem={(item) => createDocument('inventory', item, setInventory, 'Product created.')}
-                                onUpdateInventoryItem={(id, item) => updateDocument('inventory', id, item, setInventory, 'Product updated.')}
-                                onDeleteInventoryItem={(id) => deleteDocument('inventory', id, setInventory, 'Product deleted.')}
-                                productCategories={productCategories}
-                                onAddProductCategory={(cat) => createDocument('productCategories', cat, setProductCategories, 'Product setup added.')}
-                                onUpdateProductCategory={(id, cat) => updateDocument('productCategories', id, cat, setProductCategories, 'Product setup updated.')}
-                                onDeleteProductCategory={(id) => deleteDocument('productCategories', id, setProductCategories, 'Product setup deleted.')}
+                                inventory={inventory} productCategories={productCategories}
+                                currentUser={currentUser} onRefresh={refreshInventoryData}
+                                sales={sales} expenses={expenses}
+                                onResellMaterial={item => { setQuoteForSale(previous => [...previous, item]); setIsQuotationMode(false); setActiveView('Sales'); }}
                             />
                         )}
                         {activeView === 'Expenses' && (
                             <ExpensesView
                                 expenses={expenses} currentUser={currentUser} users={users} expenseCategories={expenseCategories}
-                                onAddExpense={(data) => createDocument('expenses', { ...data, userId: currentUser.id, userName: currentUser.username }, setExpenses, 'Expense added.')}
+                                onAddExpense={(data) => createDocument('expenses', { ...data, module: data.module || 'Unassigned', expenseType: 'operating', userId: currentUser.id, userName: currentUser.username }, setExpenses, 'Expense added.')}
                                 onUpdateExpense={(id, data) => updateDocument('expenses', id, data, setExpenses, 'Expense updated.')}
                                 onDeleteExpense={(id) => deleteDocument('expenses', id, setExpenses, 'Expense deleted.')}
                                 onAddExpenseCategory={(name) => createDocument('expenseCategories', { name }, setExpenseCategories, 'Category added.')}
@@ -418,6 +411,7 @@ const App: React.FC = () => {
                         )}
                         {activeView === 'Reports' && (
                             <ReportsView
+                                stockTransactions={stockTransactions}
                                 sales={sales}
                                 expenses={expenses}
                                 inventory={inventory}

@@ -1,0 +1,93 @@
+// MERGE PROPOSAL ONLY. Not deployed. Do not replace your current rules with this file.
+// No unrelated collection permissions are assumed. See INVENTORY_STEP_1.md.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function inventoryUser() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'user'];
+    }
+    function inventoryAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function inventoryMaintenance() {
+      return exists(/databases/$(database)/documents/inventoryMigrations/unopened-v1) &&
+        get(/databases/$(database)/documents/inventoryMigrations/unopened-v1).data.running == true;
+    }
+    // Staff may change balances ONLY with a new, paired Purchase/Start ledger entry.
+    // Staff cannot update/delete ledger entries, count stock, override deficits, or migrate.
+    function pairedStaffMaterial(sku, movementId) {
+      let before = get(/databases/$(database)/documents/stockItems/$(sku)).data;
+      let after = getAfter(/databases/$(database)/documents/stockItems/$(sku)).data;
+      let entry = getAfter(/databases/$(database)/documents/stockTransactions/$(movementId)).data;
+      return inventoryUser() && !inventoryMaintenance() &&
+        !exists(/databases/$(database)/documents/stockTransactions/$(movementId)) &&
+        entry.transactionId == movementId && entry.skuId == sku && entry.entity == 'material' &&
+        entry.userId == request.auth.uid &&
+        entry.get('adminOverride', false) == false &&
+        before.inventoryVersion == 1 && before.isActive != false &&
+        after.lastMovementId == movementId &&
+        after.diff(before).affectedKeys().hasOnly(['unitsOnHand', 'avgCostPerUnit', 'lastMovementId', 'lastStartedAt']) &&
+        entry.beforeUnits == before.unitsOnHand && entry.afterUnits == after.unitsOnHand &&
+        after.unitsOnHand >= 0 && after.unitsOnHand == before.unitsOnHand + entry.units &&
+        entry.unitCost >= 0 && entry.totalValue == (entry.units < 0 ? -entry.units : entry.units) * entry.unitCost &&
+        ((entry.type == 'Start' && entry.units == -1 && entry.unitCost == before.avgCostPerUnit &&
+          after.avgCostPerUnit == before.avgCostPerUnit &&
+          entry.module in ['large-format', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products']) ||
+         (entry.type == 'Purchase' && entry.units is int && entry.units > 0 &&
+          entry.module == before.module && entry.supplier is string && entry.supplier.size() > 0 &&
+          entry.paymentStatus in ['Paid', 'Credit'] &&
+          after.avgCostPerUnit == (before.unitsOnHand * before.avgCostPerUnit + entry.totalValue) / after.unitsOnHand &&
+          (entry.paymentStatus == 'Paid' ||
+            (getAfter(/databases/$(database)/documents/supplierPayables/$(movementId)).data.amount == entry.totalValue &&
+             getAfter(/databases/$(database)/documents/supplierPayables/$(movementId)).data.amountPaid == 0))));
+    }
+    match /stockItems/{sku} {
+      allow read: if inventoryUser();
+      allow create, delete: if inventoryAdmin();
+      allow update: if inventoryAdmin() || pairedStaffMaterial(sku, request.resource.data.lastMovementId);
+    }
+    match /stockTransactions/{id} {
+      allow read: if inventoryUser();
+      allow create: if (inventoryAdmin() && request.resource.data.userId == request.auth.uid) ||
+        pairedStaffMaterial(request.resource.data.skuId, id);
+      // One-time legacy annotation preserves both IDs and every original field.
+      allow update: if inventoryAdmin() && request.resource.data.legacy == true &&
+        resource.data.transactionType in ['Stock-In', 'Stock-Out'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legacy']);
+      allow delete: if false;
+    }
+    match /inventory/{id} {
+      allow read: if inventoryUser();
+      // Conservative staging rule: staff product writes remain blocked until Step 3's
+      // multi-product sale/reversal rule tests are implemented. Material Receive/Start
+      // above are paired; product sales cannot use this restriction yet.
+      allow create, update, delete: if inventoryAdmin();
+    }
+    match /supplierPayables/{id} {
+      allow read: if inventoryUser();
+      allow create: if inventoryAdmin() || (inventoryUser() &&
+        pairedStaffMaterial(getAfter(/databases/$(database)/documents/stockTransactions/$(id)).data.skuId, id) &&
+        request.resource.data.purchaseId == id && request.resource.data.amountPaid == 0 &&
+        getAfter(/databases/$(database)/documents/stockTransactions/$(id)).data.paymentStatus == 'Credit' &&
+        request.resource.data.amount == getAfter(/databases/$(database)/documents/stockTransactions/$(id)).data.totalValue);
+      allow update: if inventoryAdmin();
+      allow delete: if false;
+    }
+    match /supplierPayments/{id} {
+      allow read: if inventoryUser();
+      allow create: if inventoryAdmin() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /inventoryMigrations/{id} {
+      allow read: if inventoryUser();
+      allow create, update: if inventoryAdmin();
+      allow delete: if false;
+    }
+    // Merge materialCategories/settings permissions with your deployed rules.
+    // users/{uid}: staff MUST NOT be able to change role or grant themselves admin.
+    // Broad existing allow-write matches must be removed/narrowed: matching allows OR.
+    // Sales rules are intentionally deferred until the Step 3 handlers are connected.
+  }
+}

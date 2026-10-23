@@ -45,6 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     ];
 
     const userNavItems = [
+        { name: 'Inventory', icon: InventoryIcon },
         { name: 'Sales', icon: SalesIcon },
         { name: 'Calculator', icon: CalculatorIcon },
         { name: 'Expenses', icon: ExpensesIcon },

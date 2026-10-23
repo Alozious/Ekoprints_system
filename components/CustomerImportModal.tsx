@@ -1,3 +1,4 @@
+import InfoTooltip from './InfoTooltip';
 import React, { useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import type { Customer } from '../types';
@@ -46,12 +47,12 @@ export default function CustomerImportModal({ customers, onClose, onImport }: { 
         <div className="space-y-4 text-sm text-gray-700">
             {error && <p role="alert" className="text-red-700">{error}</p>}
             {done ? <><p role="status">Customer changes saved successfully.</p><button onClick={onClose} className={button}>Done</button></> : <>
-                <p>Choose Excel or CSV, map your columns, then settle duplicate names, emails and phone numbers. First worksheet only; maximum 400 rows / 5 MB.</p>
+                <InfoTooltip label="Customer information">Choose Excel or CSV, map your columns, then settle duplicate names, emails and phone numbers. First worksheet only; maximum 400 rows / 5 MB.</InfoTooltip>
                 <input aria-label="Customer Excel file" type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={load} />
                 {sheet && mapping && !review && <>
-                    <p>Match each customer field to an Excel column. Unmapped fields are blank for new customers and can be kept unchanged when merging.</p>
+                    <InfoTooltip label="Customer information">Match each customer field to an Excel column. Unmapped fields are blank for new customers and can be kept unchanged when merging.</InfoTooltip>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(field => <label key={field} className="capitalize font-bold">{field}{field === 'name' ? ' (required)' : ''}<select aria-label={`Excel column for ${field}`} className="block w-full border p-2 rounded-lg" value={mapping[field]} onChange={e => setMapping({ ...mapping, [field]: Number(e.target.value) })}><option value={-1}>Not mapped</option>{sheet.headers.map((header, index) => <option key={index} value={index}>{index + 1}. {header} — {sheet.rows[0]?.values[index] || '(blank)'}</option>)}</select></label>)}</div>
-                    <p>Phone cleanup runs automatically: 0700 123 456 → +256700123456. Multiple numbers may be separated by /. Each contact is cleaned and checked for duplicates. Invalid or foreign numbers are flagged for correction.</p>
+                    <InfoTooltip label="Customer information">Phone cleanup runs automatically: 0700 123 456 → +256700123456. Multiple numbers may be separated by /. Each contact is cleaned and checked for duplicates. Invalid or foreign numbers are flagged for correction.</InfoTooltip>
                     <button className={button} disabled={mapping.name < 0 || new Set(fields.map(f => mapping[f]).filter(v => v >= 0)).size !== fields.map(f => mapping[f]).filter(v => v >= 0).length} onClick={() => { setReview(true); setDecisions({}); }}>Check duplicates and preview</button>
                 </>}
                 {review && <>

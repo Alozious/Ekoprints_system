@@ -1,7 +1,8 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
-import { Sale, Expense, StockItem, User, SaleItem } from '../types';
+import { Sale, Expense, StockItem, StockTransaction, User, SaleItem } from '../types';
+import { profitSummary } from '../reportAccounting';
 // Add missing icon imports from icons.tsx
 import { AlertTriangleIcon, BeakerIcon, ChevronDownIcon, SearchIcon, SalesIcon, ExpensesIcon, BanknotesIcon, InventoryIcon } from './icons';
 import Modal from './Modal';
@@ -11,6 +12,7 @@ interface DashboardViewProps {
   sales: Sale[];
   expenses: Expense[];
   stockItems: StockItem[];
+  stockTransactions: StockTransaction[];
   currentUser: User;
   onStockOut: (skuId: string, metersUsed: number, jobId: string, notes: string) => Promise<void>;
   onUpdateSale: (sale: Sale) => Promise<void>;
@@ -21,7 +23,6 @@ const formatUGX = (amount: number) => {
     return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' UGX';
 };
 
-const ROLL_LENGTH_METERS = 50;
 
 /**
  * Custom Searchable Select for Materials Logging
@@ -112,21 +113,14 @@ const SearchableMaterialSelect: React.FC<{
     );
 };
 
-const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockItems, currentUser, onStockOut, onUpdateSale }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockItems, stockTransactions = [], currentUser, onStockOut, onUpdateSale }) => {
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
   const [saleForUsage, setSaleForUsage] = useState<Sale | null>(null);
   const [usageEntries, setUsageEntries] = useState<{[key: string]: { skuId: string, meters: number }}>({});
   const { addToast } = useToast();
 
-  const isLoggable = (sale: Sale) => {
-      if (sale.usageLogged) return false;
-      return sale.items.some(item => 
-          item.name.toLowerCase().includes('print') || 
-          item.name.toLowerCase().includes('roll') ||
-          item.name.toLowerCase().includes('dtf') ||
-          item.name.toLowerCase().includes('banner')
-      );
-  };
+  const isLoggable = (_sale: Sale) => false; // Costs are recorded by Start or unopened resale.
+
 
   const pendingLogs = useMemo(() => {
       return sales.filter(isLoggable);
@@ -145,17 +139,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
 
   const totalRevenue = relevantSales.reduce((sum, sale) => sum + sale.total, 0);
   const totalExpenses = relevantExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const netProfit = totalRevenue - totalExpenses;
+  const profit = profitSummary(relevantSales, relevantExpenses, stockTransactions, { period: 'all' });
+  const netProfit = currentUser.role === 'admin' ? profit.netProfit : totalRevenue;
   
   const totalMaterialsValue = currentUser.role === 'admin' 
-      ? stockItems.reduce((sum, item) => sum + ((item.totalStockMeters || 0) / ROLL_LENGTH_METERS) * item.lastPurchasePricePerRoll_UGX, 0) 
+      ? stockItems.reduce((sum, item) => sum + (item.inventoryVersion === 1 ? (item.unitsOnHand || 0) * (item.avgCostPerUnit || 0) : 0), 0)
       : 0;
 
   const salesData = relevantSales
     .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map(s => ({ name: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric'}), sales: s.total }));
     
-  const lowStockItems = stockItems.filter(item => (item.totalStockMeters || 0) <= item.reorderLevel);
+  const lowStockItems = stockItems.filter(item => item.inventoryVersion === 1 && item.isActive !== false && item.reorderLevelNeedsReview === false && (item.unitsOnHand || 0) <= item.reorderLevel);
 
   const StatCard = ({ title, value, colorClass, icon }: { title: string; value: string; colorClass: string, icon: React.ReactNode}) => (
     <div className="bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex items-center space-x-5 border border-gray-50 group hover:shadow-xl transition-all duration-300">
@@ -246,6 +241,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
         <StatCard title={currentUser.role === 'admin' ? "Gross Revenue" : "Sales Today"} value={formatUGX(totalRevenue)} colorClass="bg-emerald-50 text-emerald-600" icon={<SalesIcon className="w-6 h-6" />}/>
         <StatCard title={currentUser.role === 'admin' ? "Expenditure" : "Expenses Today"} value={formatUGX(totalExpenses)} colorClass="bg-rose-50 text-rose-600" icon={<ExpensesIcon className="w-6 h-6" />}/>
         <StatCard title={currentUser.role === 'admin' ? "Net Earnings" : "Net Sales"} value={formatUGX(netProfit)} colorClass="bg-sky-50 text-sky-600" icon={<BanknotesIcon className="w-6 h-6" />}/>
+        {currentUser.role === 'admin' && <><StatCard title="COGS" value={formatUGX(profit.cogs)} colorClass="bg-amber-50 text-amber-600" icon={<ExpensesIcon className="w-6 h-6" />} /><StatCard title="Gross Profit" value={formatUGX(profit.grossProfit)} colorClass="bg-emerald-50 text-emerald-600" icon={<BanknotesIcon className="w-6 h-6" />} /></>}
         {currentUser.role === 'admin' && (
             <StatCard title="Inventory Value" value={formatUGX(totalMaterialsValue)} colorClass="bg-indigo-50 text-indigo-600" icon={<InventoryIcon className="w-6 h-6" />}/>
         )}
@@ -264,7 +260,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
                         <div key={item.skuId} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-100">
                             <span className="font-black text-gray-800 text-xs uppercase truncate pr-4">{item.itemName}</span>
                             <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded">
-                                {(item.totalStockMeters || 0).toFixed(1)}m Left
+                                {item.unitsOnHand || 0} {item.unit || 'roll'} unopened
                             </span>
                         </div>
                     ))}

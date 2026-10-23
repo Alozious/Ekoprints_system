@@ -1,821 +1,226 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { MaterialCategory, StockItem, StockTransaction, PricingTier, InventoryItem, ProductCategory } from '../types';
-import Modal from './Modal';
-import ConfirmationModal from './ConfirmationModal';
-import { PlusIcon, EditIcon, TrashIcon, AlertTriangleIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, BeakerIcon, InventoryIcon } from './icons';
+import InfoTooltip from './InfoTooltip';
+import React, { useMemo, useRef, useState } from 'react';
+import type { Department, Expense, InventoryItem, MaterialCategory, PricingTier, ProductCategory, Sale, SaleItem, StockItem, StockTransaction, StockUnit, User } from '../types';
+import ProfitReport from './ProfitReport';
+import { db } from '../firebase';
+import { createStockService } from '../stockService';
+import { createInventorySetupService } from '../inventorySetupService';
+import type { ProductDetails } from '../inventorySetupService';
+import { stockUnits } from '../inventorySetup';
 import { useToast } from '../App';
+import Modal from './Modal';
 
-const ROLL_LENGTH_METERS = 50;
-
-interface InventoryViewProps {
-  materialCategories: MaterialCategory[];
-  stockItems: StockItem[];
-  stockTransactions: StockTransaction[];
-  pricingTiers: PricingTier[];
-  onStockIn: (skuId: string, rolls: number, price: number, notes: string) => Promise<void>;
-  onStockOut: (skuId: string, metersUsed: number, jobId: string, notes: string) => Promise<void>;
-  onAddCategory: (name: string, module: string) => Promise<void>;
-  onUpdateCategory: (id: string, name: string) => Promise<void>;
-  onToggleCategoryStatus: (id: string, currentStatus: boolean) => Promise<void>;
-  onDeleteCategory: (category: MaterialCategory) => Promise<void>;
-  onAddStockItem: (categoryId: string, width: number, reorderLevel: number, itemName: string, module: string) => Promise<void>;
-  onUpdateStockItem: (id: string, reorderLevel: number) => Promise<void>;
-  onDeleteStockItem: (id: string) => Promise<void>;
-  onAddTier: (name: string, value: number, categoryId: string) => Promise<void>;
-  onUpdateTier: (id: string, name: string, value: number) => Promise<void>;
-  onDeleteTier: (id: string) => Promise<void>;
-  inventory: InventoryItem[];
-  onAddInventoryItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
-  onUpdateInventoryItem: (id: string, item: Partial<InventoryItem>) => Promise<void>;
-  onDeleteInventoryItem: (id: string) => Promise<void>;
-  productCategories: ProductCategory[];
-  onAddProductCategory: (cat: Omit<ProductCategory, 'id'>) => Promise<void>;
-  onUpdateProductCategory: (id: string, cat: Partial<ProductCategory>) => Promise<void>;
-  onDeleteProductCategory: (id: string) => Promise<void>;
+interface Props {
+  materialCategories: MaterialCategory[]; stockItems: StockItem[]; stockTransactions: StockTransaction[];
+  pricingTiers: PricingTier[]; inventory: InventoryItem[]; productCategories: ProductCategory[];
+  currentUser: User; onRefresh: () => Promise<void>;
+  onResellMaterial: (item: SaleItem) => void;
+  sales?: Sale[]; expenses?: Expense[];
 }
-
-const formatUGX = (amount: number | undefined) => {
-  if (typeof amount !== 'number' || isNaN(amount)) return '0 UGX';
-  return new Intl.NumberFormat('en-US').format(amount) + ' UGX';
+const departments: { id: Department; label: string }[] = [
+  { id: 'large-format', label: 'Large Format' }, { id: 'dtf', label: 'DTF' }, { id: 'embroidery', label: 'Embroidery' },
+  { id: 'bizhub', label: 'Digital / Bizhub' }, { id: 'products', label: 'Other Products' },
+];
+const input = 'w-full rounded-xl bg-gray-800 p-3 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-yellow-400';
+const primary = 'bg-yellow-400 text-gray-900 px-4 py-3 rounded-xl font-black text-xs disabled:opacity-40';
+const secondary = 'bg-gray-100 text-gray-800 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40';
+const cell = 'px-4 py-4';
+const ugx = (n: number) => `${new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(n)} UGX`;
+const stockId = (item: StockItem) => item.id || item.skuId;
+const ready = (item: StockItem) => item.inventoryVersion === 1 && Number.isFinite(item.unitsOnHand) && Number.isFinite(item.avgCostPerUnit);
+const missingCost = (item: InventoryItem) => {
+  const cost = item.avgCost ?? item.purchasePrice;
+  return item.costMissing || typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0;
 };
-
-interface SetupViewProps extends InventoryViewProps {
-  categoryConfig: { id: string, label: string, type: string };
-  filteredMaterialCategories: MaterialCategory[];
-  filteredStockItems: StockItem[];
-  filteredProductCategories: ProductCategory[];
-  onOpenProductTypeModal: (config: ProductCategory | null) => void;
+type Dialog =
+  | { kind: 'resell'; item: StockItem }
+  | { kind: 'resalePrice'; item: StockItem }
+  | { kind: 'receive'; item: StockItem | InventoryItem; product: boolean }
+  | { kind: 'start'; item: StockItem }
+  | { kind: 'material'; item: MaterialCategory | null }
+  | { kind: 'variants'; category: MaterialCategory }
+  | { kind: 'variant'; item: StockItem }
+  | { kind: 'product'; item: InventoryItem | null }
+  | { kind: 'productCategory'; item: ProductCategory | null }
+  | { kind: 'tier'; item: PricingTier | null }
+  | { kind: 'active'; collection: 'stockItems' | 'materialCategories' | 'inventory' | 'productCategories'; id: string; name: string; active: boolean };
+function Field({ label, children }: { label: string; children: React.ReactNode; key?: string | number }) {
+  return <label className="block space-y-2 text-xs font-bold text-gray-500"><span>{label}</span>{children}</label>;
 }
+function Numeric({ label, value, onChange, step = '1', required = true }: { label: string; value: string; onChange: (value: string) => void; step?: string; required?: boolean }) {
+  return <Field label={label}><input className={input} type="number" min="0" step={step} value={value} onChange={e => onChange(e.target.value)} required={required} /></Field>;
+}
+function Empty({ children }: { children: React.ReactNode }) { return <p className="p-6 text-sm text-gray-500">{children}</p>; }
 
-const SetupView: React.FC<SetupViewProps> = (props) => {
-  const { categoryConfig } = props;
-  if (categoryConfig.type === 'stock') {
-    return <GeneralSetupView {...props} />;
+export default function InventoryView(props: Props) {
+  const { currentUser, materialCategories, stockItems, stockTransactions, pricingTiers, inventory, productCategories } = props;
+  const admin = currentUser.role === 'admin';
+  const [module, setModule] = useState<Department>('large-format');
+  const [tab, setTab] = useState<'stock' | 'products' | 'setup' | 'reports'>('stock');
+  const [inactive, setInactive] = useState(false), [search, setSearch] = useState('');
+  const [expandedMaterials, setExpandedMaterials] = useState<Set<string>>(() => new Set());
+  const [dialog, setDialog] = useState<Dialog | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const lock = useRef(false);
+  const { addToast } = useToast();
+  const stock = useMemo(() => createStockService(db, currentUser), [currentUser]);
+  const setup = useMemo(() => createInventorySetupService(db, currentUser), [currentUser]);
+  const open = (next: Dialog) => { setError(''); setDialog(next); };
+  async function run(action: () => Promise<unknown>, success: string) {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError('');
+    try {
+      await action(); setDialog(null); addToast(success, 'success');
+      try { await props.onRefresh(); } catch { addToast('Saved, but refresh failed. Reload before the next action.', 'error'); }
+    } catch (err) { const message = err instanceof Error ? err.message : 'Unable to save.'; setError(message); addToast(message, 'error'); }
+    finally { lock.current = false; setBusy(false); }
   }
-  if (categoryConfig.type === 'mixed') {
-    return (
-      <div className="space-y-8">
-        <GeneralSetupView {...props} />
-        <PricingSetupView {...props} />
-      </div>
-    );
-  }
-  return (
-    <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} Setup</h3>
-        <button onClick={() => props.onOpenProductTypeModal(null)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
-          <PlusIcon className="w-4 h-4 mr-2"/> Add Category
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {props.filteredProductCategories.map(cat => (
-          <div key={cat.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
-            <span className="font-black text-[11px] text-gray-900 uppercase tracking-tight">{cat.name}</span>
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => props.onOpenProductTypeModal(cat)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><EditIcon className="w-4 h-4"/></button>
-              <button onClick={() => props.onDeleteProductCategory(cat.id)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><TrashIcon className="w-4 h-4"/></button>
-            </div>
-          </div>
-        ))}
-        {props.filteredProductCategories.length === 0 && <p className="col-span-full text-center py-6 text-gray-300 font-bold italic text-xs">No unit categories established for this module</p>}
-      </div>
-    </div>
-  );
-};
+  const matches = (name: string) => name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
+  const categories = materialCategories.filter(c => c.module === module && (inactive || c.isActive !== false));
+  const allMaterials = materialCategories.filter(c => c.module === module);
+  const variants = stockItems.filter(s => s.module === module && (inactive || (s.isActive !== false && materialCategories.find(c => c.id === s.categoryId)?.isActive !== false)) && matches(`${s.itemName} ${s.variantLabel || ''} ${allMaterials.find(c => c.id === s.categoryId)?.name || ''}`));
+  const products = inventory.filter(p => p.module === module && (inactive || p.isActive !== false) && matches(`${p.name} ${p.sku} ${p.category}`));
+  const reportVariants = stockItems.filter(s => s.module === module);
+  const reportProducts = inventory.filter(p => p.module === module);
+  const productTypes = productCategories.filter(p => p.module === module && (inactive || p.isActive !== false));
+  const groupMap = new Map(categories.filter(c => !search.trim() || matches(c.name) || variants.some(v => v.categoryId === c.id)).map(c => [c.id, c.name]));
+  variants.forEach(s => { if (!groupMap.has(s.categoryId)) groupMap.set(s.categoryId, allMaterials.find(c => c.id === s.categoryId)?.name || 'Material setup needed'); });
+  const activeButton = (collection: 'stockItems' | 'materialCategories' | 'inventory' | 'productCategories', id: string, name: string, isActive?: boolean) =>
+    <button className={secondary} disabled={busy} onClick={() => open({ kind: 'active', collection, id, name, active: isActive === false })}>{isActive === false ? 'Reactivate' : 'Deactivate'}</button>;
 
-const ConfigModalContent: React.FC<{ initialData: ProductCategory | null, module: string, onSave: (data: Partial<ProductCategory>) => Promise<void> }> = ({ initialData, module, onSave }) => {
-  const [name, setName] = useState(initialData?.name || '');
-  const [field1, setField1] = useState(initialData?.field1 || '');
-  const [field2, setField2] = useState(initialData?.field2 || '');
-  const [field3, setField3] = useState(initialData?.field3 || '');
-  const [field4, setField4] = useState(initialData?.field4 || '');
+  return <div className="space-y-4">
+    <div className="flex justify-between items-center"><div className="flex items-center gap-3"><h2 className="text-2xl font-black text-gray-900">Inventory</h2><InfoTooltip label="Inventory information"><p>Materials show unopened units only. Starting a unit removes it from stock. All unopened materials can be resold.</p><p>Receive stock records purchases. Edit setup changes reorder levels and reference roll length.</p>{admin && <p>Starting units charges average cost to COGS. Valuation includes inactive stock in this department. Search does not change valuation. Profit covers all time; Business Reports provides date filters.</p>}</InfoTooltip></div><button className={secondary} disabled={busy} onClick={() => run(async () => {}, 'Inventory refreshed.')}>Refresh</button></div>
+    <div className="flex overflow-x-auto border-b border-gray-200">{departments.map(d => <button key={d.id} disabled={busy} onClick={() => { setModule(d.id); setSearch(''); }} className={`px-5 py-4 whitespace-nowrap text-xs font-black border-b-4 ${module === d.id ? 'border-yellow-400 bg-yellow-50 text-gray-900' : 'border-transparent text-gray-500'}`}>{d.label}</button>)}</div>
+    <div className="flex flex-wrap justify-between gap-4"><div className="flex gap-1 rounded-xl bg-gray-100 p-1">{(['stock', 'products', ...(admin ? ['setup', 'reports'] as const : [])] as const).map(t => <button className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === t ? 'bg-gray-900 text-white' : 'text-gray-500'}`} key={t} disabled={busy} onClick={() => setTab(t)}>{t === 'stock' ? 'Materials' : t === 'products' ? 'Resale products' : t === 'setup' ? 'Setup' : 'Reports'}</button>)}</div>{admin && <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={inactive} onChange={e => setInactive(e.target.checked)} />Show inactive</label>}</div>
+    {tab === 'products' && <input aria-label="Search inventory" className="bg-white rounded-xl border border-gray-200 px-4 py-3 w-full max-w-md" placeholder="Search inventory…" value={search} onChange={e => setSearch(e.target.value)} />}
 
-  const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-  const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
+    {tab === 'stock' && <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <input aria-label="Search inventory" className="bg-white rounded-xl border border-gray-200 px-4 py-2.5 w-full sm:w-64 sm:flex-1" placeholder="Find material or variant…" value={search} onChange={e => setSearch(e.target.value)} />
+        <button className={secondary} disabled={busy || !!search.trim()} onClick={() => setExpandedMaterials(new Set(groupMap.keys()))}>Expand all</button>
+        <button className={secondary} disabled={busy || !!search.trim()} onClick={() => setExpandedMaterials(new Set())}>Collapse all</button>
+        {admin && <button className={primary} disabled={busy} onClick={() => open({ kind: 'material', item: null })}>Add material</button>}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+        {[...groupMap].map(([id, name]) => {
+          const items = variants.filter(v => v.categoryId === id), counted = items.filter(ready);
+          const expansionKey = search.trim() ? `search-collapse:${search.trim()}:${id}` : id;
+          const isExpanded = search.trim() ? !expandedMaterials.has(expansionKey) : expandedMaterials.has(expansionKey);
+          const low = counted.filter(v => v.reorderLevelNeedsReview === false && v.unitsOnHand! <= v.reorderLevel).length;
+          const pending = items.length - counted.length;
+          return <section key={id} className={`min-w-0 bg-white rounded-2xl shadow-sm border overflow-hidden ${low ? 'border-amber-300' : 'border-gray-100'}`}>
+            <button type="button" className="w-full text-left p-4 hover:bg-gray-50 transition-colors focus-visible:outline-yellow-400" aria-expanded={isExpanded} aria-controls={`material-${id}`} onClick={() => setExpandedMaterials(previous => { const next = new Set(previous); if (next.has(expansionKey)) next.delete(expansionKey); else next.add(expansionKey); return next; })}>
+              <div className="flex justify-between items-start gap-3"><h3 className="text-sm font-black break-words">{name}</h3><span className="shrink-0 text-xs text-gray-400">{isExpanded ? 'Collapse −' : 'Expand +'}</span></div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"><span>{items.length} {items.length === 1 ? 'variant' : 'variants'}</span><span className="font-bold text-gray-900">Unopened units: {counted.reduce((sum, v) => sum + v.unitsOnHand!, 0)}</span>{admin && <span>{ugx(counted.reduce((sum, v) => sum + v.unitsOnHand! * v.avgCostPerUnit!, 0))}</span>}</div>
+              {(low > 0 || pending > 0) && <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-amber-700">{low > 0 && <span className="bg-amber-50 rounded-md px-2 py-1">{low} low stock</span>}{pending > 0 && <span className="bg-amber-50 rounded-md px-2 py-1">{pending} physical count required</span>}</div>}
+            </button>
+            {isExpanded && <div id={`material-${id}`} className="border-t border-gray-100">
+              {items.map(item => {
+                const migrated = ready(item), started = stockTransactions.filter(t => 'type' in t && t.type === 'Start' && (t.skuId === stockId(item) || t.skuId === item.skuId)).sort((a, b) => b.date.localeCompare(a.date))[0];
+                const disabled = busy || !migrated || item.isActive === false || allMaterials.find(c => c.id === item.categoryId)?.isActive === false;
+                const isLow = migrated && item.reorderLevelNeedsReview === false && item.unitsOnHand! <= item.reorderLevel;
+                return <article key={stockId(item)} className={`p-4 space-y-3 border-b border-gray-100 last:border-b-0 ${isLow ? 'bg-amber-50' : ''}`}>
+                  <div className="flex justify-between items-start gap-2"><div className="min-w-0"><p className="text-sm font-bold break-words">{item.variantLabel || item.itemName}</p><p className="text-xs text-gray-500 break-words">{item.itemName}{item.isActive === false ? ' · Inactive' : ''}</p></div><span className="shrink-0 rounded-lg bg-gray-100 px-2 py-1 text-xs font-bold">{migrated ? `${item.unitsOnHand} ${item.unit || 'roll'}` : 'Count needed'}</span></div>
+                  {admin && <dl className="grid grid-cols-2 gap-2 text-xs"><div><dt className="text-gray-400">Avg cost / unit</dt><dd className="font-bold mt-1">{migrated ? ugx(item.avgCostPerUnit!) : 'Pending migration'}</dd></div><div><dt className="text-gray-400">Total value</dt><dd className="font-bold mt-1">{migrated ? ugx(item.unitsOnHand! * item.avgCostPerUnit!) : 'Excluded'}</dd></div></dl>}
+                  <p className="text-xs text-gray-500">Reorder units: {migrated && item.reorderLevelNeedsReview === false ? item.reorderLevel : 'Review in setup'}{isLow ? ' · Low stock' : ''}</p>
+                  <div className="flex flex-wrap gap-2"><button className={secondary} disabled={disabled} onClick={() => open({ kind: 'receive', item, product: false })}>Receive stock</button><button className={primary} disabled={disabled || (!admin && item.unitsOnHand! < 1)} onClick={() => open({ kind: 'start', item })}>Start {item.unit || 'roll'}</button><button className="bg-blue-50 text-blue-700 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40" disabled={disabled || item.unitsOnHand! < 1} onClick={() => open({ kind: 'resell', item })}>Sell unopened</button>{admin && <button className={secondary} disabled={busy} onClick={() => open({ kind: 'variant', item })}>Edit setup</button>}</div>
+                </article>;
+              })}
+              {!items.length && <Empty>No variants yet. Add widths, sizes or colours.</Empty>}
+              {admin && categories.some(c => c.id === id && c.isActive !== false) && <div className="p-3 bg-gray-50"><button className={`${secondary} w-full`} disabled={busy} onClick={() => open({ kind: 'variants', category: categories.find(c => c.id === id)! })}>Add variants</button></div>}
+            </div>}
+          </section>;
+        })}
+      </div>
+      {!groupMap.size && <Empty>{search.trim() ? 'No matching materials or variants.' : 'No materials in this department. An admin can add materials and variants in Setup.'}</Empty>}
+    </div>}
 
-  return (
-    <form onSubmit={e => { e.preventDefault(); onSave({ name, field1, field2, field3, field4, module }); }} className="space-y-6">
-      <div>
-        <label className={labelStyle}>Category Name</label>
-        <input type="text" value={name} onChange={e => setName(e.target.value)} className={darkInput} required />
-      </div>
-      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4">
-        <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Configuration Scope</p>
-        <p className="text-xs font-bold text-gray-700 uppercase">Linked to Module: {module}</p>
-      </div>
-      <div>
-        <label className={labelStyle}>Attribute 1 Label</label>
-        <input type="text" value={field1} onChange={e => setField1(e.target.value)} className={darkInput} placeholder="e.g. Size" />
-      </div>
-      <div>
-        <label className={labelStyle}>Attribute 2 Label</label>
-        <input type="text" value={field2} onChange={e => setField2(e.target.value)} className={darkInput} placeholder="e.g. Color" />
-      </div>
-      <div>
-        <label className={labelStyle}>Attribute 3 Label</label>
-        <input type="text" value={field3} onChange={e => setField3(e.target.value)} className={darkInput} placeholder="e.g. Material" />
-      </div>
-      <div>
-        <label className={labelStyle}>Attribute 4 Label</label>
-        <input type="text" value={field4} onChange={e => setField4(e.target.value)} className={darkInput} placeholder="e.g. Brand" />
-      </div>
-      <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Save Config</button>
-    </form>
-  );
-};
+    {tab === 'products' && module !== 'products' && <section className="bg-white rounded-3xl border border-gray-100 overflow-hidden"><div className="p-5 flex items-center gap-3"><h3 className="font-black">Unopened material resale</h3><InfoTooltip label="Material resale information">Quantity and purchase cost come from Materials. Set only the selling price here. Receive stock and Start unit update the same stock used by Material Sales in Calculator.</InfoTooltip></div><div className="overflow-auto"><table className="w-full text-sm text-left"><thead className="bg-gray-50 text-xs text-gray-500"><tr>{['Product name', 'Variant', 'Unopened units', ...(admin ? ['Purchase cost / unit'] : []), 'Selling price / unit', 'Actions'].map(label => <th className={cell} key={label}>{label}</th>)}</tr></thead><tbody>{variants.map(item => <tr className="border-t border-gray-100" key={stockId(item)}><td className={cell}>{allMaterials.find(c => c.id === item.categoryId)?.name || item.itemName}</td><td className={cell}>{item.variantLabel || item.itemName}</td><td className={cell}>{ready(item) ? `${item.unitsOnHand} ${item.unit || 'roll'}` : 'Count needed'}</td>{admin && <td className={cell}>{ready(item) ? ugx(item.avgCostPerUnit!) : 'Cost review needed'}</td>}<td className={cell}>{item.resalePrice === undefined ? 'Not set' : ugx(item.resalePrice)}</td><td className={cell}><div className="flex flex-wrap gap-2">{admin && <button className={secondary} disabled={busy || item.isActive === false} onClick={() => open({ kind: 'resalePrice', item })}>Set selling price</button>}<button className={primary} disabled={busy || !ready(item) || item.isActive === false || item.unitsOnHand! < 1} onClick={() => open({ kind: 'resell', item })}>Sell unopened</button></div></td></tr>)}</tbody></table></div>{!variants.length && <Empty>No materials in this department.</Empty>}</section>}
+    {tab === 'products' && module === 'products' && <section className="bg-white rounded-3xl border border-gray-100 overflow-hidden"><div className="p-5 flex justify-between"><h3 className="font-black">Resale products</h3>{admin && <button className={primary} onClick={() => open({ kind: 'product', item: null })}>Add product</button>}</div>
+      <div className="overflow-auto"><table className="w-full text-sm text-left"><thead className="bg-gray-50 text-xs text-gray-500"><tr>{['Product', 'Quantity', 'Selling price', ...(admin ? ['Purchase price / avg cost', 'Value at cost'] : []), 'Reorder', 'Actions'].map(h => <th key={h} className={cell}>{h}</th>)}</tr></thead><tbody>{products.map(p => <tr key={p.id} className={`border-t border-gray-100 ${p.quantity <= p.minStockLevel ? 'bg-amber-50' : ''}`}>
+        <td className={cell}><p className="font-bold">{p.name}{p.isActive === false ? ' · Inactive' : ''}</p><p className="text-xs text-gray-500">{p.category} · {[p.attr1, p.attr2, p.attr3, p.attr4, p.attr5].filter(Boolean).join(' / ')} · {p.sku}</p></td><td className={cell}>{p.quantity}</td><td className={cell}>{ugx(p.price)}</td>{admin && <><td className={cell}>{missingCost(p) ? <span className="text-red-700 font-bold">Cost missing — edit to review</span> : ugx(p.avgCost ?? p.purchasePrice!)}</td><td className={cell}>{missingCost(p) ? 'Excluded: cost missing' : ugx(p.quantity * (p.avgCost ?? p.purchasePrice!))}</td></>}<td className={cell}>{p.minStockLevel}</td>
+        <td className={cell}><div className="flex flex-wrap gap-2"><button className={secondary} disabled={busy || p.isActive === false} onClick={() => open({ kind: 'receive', item: p, product: true })}>Restock</button>{admin && <><button className={secondary} onClick={() => open({ kind: 'product', item: p })}>Edit</button>{activeButton('inventory', p.id, p.name, p.isActive)}</>}</div></td>
+      </tr>)}</tbody></table></div>{!products.length && <Empty>No resale products in this department.</Empty>}</section>}
 
-const ProductModal: React.FC<{
-  isOpen: boolean; onClose: () => void; product: InventoryItem | null; productCategories: ProductCategory[];
-  module: string;
-  onSave: (data: Partial<InventoryItem>) => Promise<void>;
-}> = ({ isOpen, onClose, product, productCategories, module, onSave }) => {
-  const [formData, setFormData] = useState<Partial<InventoryItem>>({
-    name: '', category: '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: '', attr4: '', module: module
-  });
+    {tab === 'setup' && admin && <div className="space-y-6"><section className="bg-white rounded-3xl p-6 space-y-4 border border-gray-100"><div className="flex justify-between"><h3 className="font-black">Materials and variants</h3><button className={primary} onClick={() => open({ kind: 'material', item: null })}>Add material</button></div>
+      {categories.map(c => <div key={c.id} className="p-4 bg-gray-50 rounded-xl flex flex-wrap justify-between gap-3"><div><p className="font-bold">{c.name}{c.isActive === false ? ' · Inactive' : ''}</p><p className="text-xs text-gray-500">{c.unitType || 'roll'} · {stockItems.filter(s => s.categoryId === c.id).length} variants</p></div><div className="flex flex-wrap gap-2"><button className={secondary} disabled={c.isActive === false} onClick={() => open({ kind: 'variants', category: c })}>Add variants</button><button className={secondary} onClick={() => open({ kind: 'material', item: c })}>Edit</button>{activeButton('materialCategories', c.id, c.name, c.isActive)}</div></div>)}
+      {!categories.length && <Empty>Add a material, choose its unit, then add its variants.</Empty>}</section>
+      <section className="bg-white rounded-3xl p-6 space-y-4 border border-gray-100"><div className="flex justify-between"><h3 className="font-black">Calculator pricing tiers</h3><button className={primary} disabled={!categories.length} onClick={() => open({ kind: 'tier', item: null })}>Add tier</button></div>{pricingTiers.filter(t => allMaterials.some(c => c.id === t.categoryId)).map(t => <div key={t.id} className="flex justify-between items-center p-4 rounded-xl bg-gray-50"><span>{allMaterials.find(c => c.id === t.categoryId)?.name} · {t.name} · {ugx(t.value)}</span><button className={secondary} onClick={() => open({ kind: 'tier', item: t })}>Edit</button></div>)}</section>
+      {module === 'products' && <section className="bg-white rounded-3xl p-6 space-y-4 border border-gray-100"><div className="flex justify-between"><h3 className="font-black">Resale product categories</h3><button className={primary} onClick={() => open({ kind: 'productCategory', item: null })}>Add category</button></div>{productTypes.map(c => <div key={c.id} className="flex flex-wrap justify-between gap-3 p-4 rounded-xl bg-gray-50"><span className="font-bold">{c.name}{c.isActive === false ? ' · Inactive' : ''}</span><div className="flex gap-2"><button className={secondary} onClick={() => open({ kind: 'productCategory', item: c })}>Edit fields</button>{activeButton('productCategories', c.id, c.name, c.isActive)}</div></div>)}</section>}</div>}
 
-  useEffect(() => {
-    if (product) setFormData(product);
-    else setFormData({ name: '', category: '', quantity: 0, price: 0, minPrice: 0, minStockLevel: 5, attr1: '', attr2: '', attr3: '', attr4: '', module: module });
-  }, [product, isOpen, module]);
+    {tab === 'reports' && admin && <section className="bg-white rounded-3xl p-6 space-y-4 border border-gray-100"><h3 className="font-black">Current stock valuation at cost</h3><p>Unopened materials: <strong>{ugx(reportVariants.filter(ready).reduce((sum, s) => sum + s.unitsOnHand! * s.avgCostPerUnit!, 0))}</strong></p><p>Resale products: <strong>{ugx(reportProducts.filter(p => !missingCost(p)).reduce((sum, p) => sum + p.quantity * (p.avgCost ?? p.purchasePrice!), 0))}</strong></p><p className="text-sm text-amber-700">{reportVariants.filter(v => !ready(v)).length} variants need physical counts. {reportProducts.filter(missingCost).length} resale items have missing costs. These are excluded from valuation.</p><ProfitReport sales={props.sales || []} expenses={props.expenses || []} stockTransactions={stockTransactions} filter={{ period: 'all' }} module={module} /></section>}
 
-  const activeCat = productCategories.find(c => c.name === formData.category);
-  const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-  const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={product ? "Update Inventory" : "New Inventory Item"}>
-      <form onSubmit={e => { e.preventDefault(); onSave(formData); }} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className={labelStyle}>Item Name</label>
-            <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={darkInput} required />
-          </div>
-          <div className="col-span-2">
-            <label className={labelStyle}>Category (Module Specific)</label>
-            <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={darkInput} required>
-              <option value="">Select Category...</option>
-              {productCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
-          </div>
-          {activeCat?.field1 && (
-            <div>
-              <label className={labelStyle}>{activeCat.field1}</label>
-              <input type="text" value={formData.attr1 || ''} onChange={e => setFormData({...formData, attr1: e.target.value})} className={darkInput} />
-            </div>
-          )}
-          {activeCat?.field2 && (
-            <div>
-              <label className={labelStyle}>{activeCat.field2}</label>
-              <input type="text" value={formData.attr2 || ''} onChange={e => setFormData({...formData, attr2: e.target.value})} className={darkInput} />
-            </div>
-          )}
-          {activeCat?.field3 && (
-            <div>
-              <label className={labelStyle}>{activeCat.field3}</label>
-              <input type="text" value={formData.attr3 || ''} onChange={e => setFormData({...formData, attr3: e.target.value})} className={darkInput} />
-            </div>
-          )}
-          {activeCat?.field4 && (
-            <div>
-              <label className={labelStyle}>{activeCat.field4}</label>
-              <input type="text" value={formData.attr4 || ''} onChange={e => setFormData({...formData, attr4: e.target.value})} className={darkInput} />
-            </div>
-          )}
-          <div>
-            <label className={labelStyle}>Quantity</label>
-            <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 0})} className={darkInput} required />
-          </div>
-          <div>
-            <label className={labelStyle}>Min Stock Level</label>
-            <input type="number" value={formData.minStockLevel} onChange={e => setFormData({...formData, minStockLevel: parseInt(e.target.value) || 0})} className={darkInput} required />
-          </div>
-          <div>
-            <label className={labelStyle}>Selling Price</label>
-            <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseInt(e.target.value) || 0})} className={`${darkInput} text-yellow-400`} required />
-          </div>
-          <div>
-            <label className={labelStyle}>Min Price</label>
-            <input type="number" value={formData.minPrice} onChange={e => setFormData({...formData, minPrice: parseInt(e.target.value) || 0})} className={`${darkInput} text-rose-400`} required />
-          </div>
-        </div>
-        <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all mt-4">Save Entry</button>
-      </form>
+    <Modal isOpen={dialog !== null} onClose={() => { if (!busy) setDialog(null); }} title={dialog?.kind === 'resell' ? 'Sell unopened material' : dialog?.kind === 'receive' ? (dialog.product ? 'Restock product' : 'Receive stock') : dialog?.kind === 'start' ? `Start ${dialog.item.unit || 'roll'}` : dialog?.kind === 'active' ? (dialog.active ? 'Reactivate record' : 'Deactivate record') : 'Inventory setup'} size="lg">
+      {dialog && <><fieldset disabled={busy} className="space-y-4 min-w-0">
+        {dialog.kind === 'resalePrice' && admin && <ResalePriceForm item={dialog.item} onSave={price => run(() => setup.setMaterialResalePrice(stockId(dialog.item), price), 'Selling price saved.')} />}
+        {dialog.kind === 'resell' && <MaterialResaleForm item={dialog.item} onSave={(quantity, price) => {
+          props.onResellMaterial({ itemId: `material-resale-${stockId(dialog.item)}-${Date.now()}`, materialSkuId: stockId(dialog.item), stockEntity: 'material', name: `${dialog.item.itemName} (unopened ${dialog.item.unit || 'roll'})`, quantity, price, module: dialog.item.module as Department });
+          setDialog(null);
+        }} />}
+        {dialog.kind === 'receive' && <ReceiveForm item={dialog.item} product={dialog.product} admin={admin} onSave={data => run(() => dialog.product ? stock.restockProduct((dialog.item as InventoryItem).id, data) : stock.receiveStock(stockId(dialog.item as StockItem), data), 'Stock received.')} />}
+        {dialog.kind === 'start' && <StartForm item={dialog.item} admin={admin} onSave={(charged, notes, override) => run(() => stock.startUnit(stockId(dialog.item), charged, { notes, adminOverride: override }), 'Unit started.')} />}
+        {dialog.kind === 'material' && admin && <MaterialForm item={dialog.item} module={module} onSave={(name, unit) => run(() => setup.saveMaterial(dialog.item?.id || null, name, module, unit), 'Material saved.')} />}
+        {dialog.kind === 'variants' && admin && <VariantsForm category={dialog.category} onSave={(text, reorder, length) => run(() => setup.addVariants(dialog.category.id, text, reorder, length), 'Variants created. Receive stock to add units.')} />}
+        {dialog.kind === 'variant' && admin && <VariantForm item={dialog.item} onSave={(itemName, reorderLevel, rollLengthMeters) => run(() => setup.editVariant(stockId(dialog.item), { itemName, reorderLevel, rollLengthMeters }), 'Variant setup saved.')} onActive={() => open({ kind: 'active', collection: 'stockItems', id: stockId(dialog.item), name: dialog.item.itemName, active: dialog.item.isActive === false })} />}
+        {dialog.kind === 'product' && admin && <ProductForm item={dialog.item} module={module} categories={productTypes} onSave={(data, opening, cost) => run(() => setup.saveProduct(dialog.item?.id || null, data, opening, cost), 'Product saved.')} />}
+        {dialog.kind === 'productCategory' && admin && <ProductCategoryForm item={dialog.item} onSave={(name, fields) => run(() => setup.saveProductCategory(dialog.item?.id || null, { name, module, field1: fields[0], field2: fields[1], field3: fields[2], field4: fields[3], field5: fields[4] }), 'Product category saved.')} />}
+        {dialog.kind === 'tier' && admin && <TierForm item={dialog.item} categories={allMaterials} onSave={(id, name, value) => run(() => setup.saveTier(dialog.item?.id || null, id, name, value), 'Pricing tier saved.')} />}
+        {dialog.kind === 'active' && admin && <div className="space-y-4"><p>{dialog.active ? 'Reactivate' : 'Deactivate'} <strong>{dialog.name}</strong>?</p><InfoTooltip label="Deactivation information">The record and movement history are retained. Inactive records are hidden from new selections.</InfoTooltip><button className={primary} onClick={() => run(() => setup.setActive(dialog.collection, dialog.id, dialog.active), dialog.active ? 'Record reactivated.' : 'Record deactivated.')}>Confirm {dialog.active ? 'reactivation' : 'deactivation'}</button></div>}
+      </fieldset>{busy && <p role="status" className="mt-4 text-sm">Saving…</p>}{error && <p role="alert" className="text-red-600 mt-4">{error}</p>}</>}
     </Modal>
-  );
-};
-
-const InventoryView: React.FC<InventoryViewProps> = (props) => {
-  const [activeCategoryTab, setActiveCategoryTab] = useState('large-format');
-  const [activeSubTab, setActiveSubTab] = useState('dashboard');
-  
-  const [isProductTypeModalOpen, setIsProductTypeModalOpen] = useState(false);
-  const [editingProductType, setEditingProductType] = useState<ProductCategory | null>(null);
-
-  const INVENTORY_TABS = [
-      { id: 'large-format', label: 'Large Format', type: 'mixed' },
-      { id: 'dtf', label: 'DTF', type: 'mixed' },
-      { id: 'embroidery', label: 'Embroidery', type: 'product' },
-      { id: 'bizhub', label: 'Bizhub', type: 'product' },
-      { id: 'supplies', label: 'Supplies', type: 'product' },
-      { id: 'products', label: 'Products', type: 'product' },
-  ];
-
-  const activeCategoryConfig = INVENTORY_TABS.find(t => t.id === activeCategoryTab) || INVENTORY_TABS[0];
-
-  const filteredMaterialCategories = useMemo(() => {
-      return props.materialCategories.filter(cat => cat.module === activeCategoryTab);
-  }, [props.materialCategories, activeCategoryTab]);
-
-  const filteredStockItems = useMemo(() => {
-      return props.stockItems.filter(item => item.module === activeCategoryTab);
-  }, [props.stockItems, activeCategoryTab]);
-
-  const filteredInventory = useMemo(() => {
-      return props.inventory.filter(item => item.module === activeCategoryTab);
-  }, [props.inventory, activeCategoryTab]);
-
-  const filteredProductCategories = useMemo(() => {
-      return props.productCategories.filter(cat => cat.module === activeCategoryTab);
-  }, [props.productCategories, activeCategoryTab]);
-
-  const activeCategoryClass = "px-6 py-4 text-[11px] font-black text-yellow-900 bg-yellow-400/10 border-b-4 border-yellow-500 transition-all uppercase tracking-widest whitespace-nowrap";
-  const inactiveCategoryClass = "px-6 py-4 text-[11px] font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-all uppercase tracking-widest whitespace-nowrap";
-  const activeSubTabClass = "px-5 py-2 text-[10px] font-black text-white bg-[#1A2232] rounded-lg shadow-md transition-all uppercase tracking-wider";
-  const inactiveSubTabClass = "px-5 py-2 text-[10px] font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition-all uppercase tracking-wider";
-
-  return (
-    <div className="space-y-8">
-      <div className="flex overflow-x-auto border-b border-gray-200 no-scrollbar">
-          {INVENTORY_TABS.map(tab => (
-              <button 
-                key={tab.id} 
-                onClick={() => { setActiveCategoryTab(tab.id); setActiveSubTab('dashboard'); }} 
-                className={activeCategoryTab === tab.id ? activeCategoryClass : inactiveCategoryClass}
-              >
-                {tab.label}
-              </button>
-          ))}
-      </div>
-
-      <div className="flex items-center space-x-1 bg-gray-200/50 p-1 rounded-xl w-fit">
-          <button onClick={() => setActiveSubTab('dashboard')} className={activeSubTab === 'dashboard' ? activeSubTabClass : inactiveSubTabClass}>Dashboard</button>
-          <button onClick={() => setActiveSubTab('setup')} className={activeSubTab === 'setup' ? activeSubTabClass : inactiveSubTabClass}>Setup</button>
-          <button onClick={() => setActiveSubTab('reports')} className={activeSubTab === 'reports' ? activeSubTabClass : inactiveSubTabClass}>Reports</button>
-      </div>
-
-      <div className="min-h-[500px]">
-        {activeSubTab === 'dashboard' && (
-            <InventoryDashboardView 
-                {...props} 
-                categoryConfig={activeCategoryConfig} 
-                filteredStockItems={filteredStockItems} 
-                filteredInventory={filteredInventory} 
-                filteredProductCategories={filteredProductCategories}
-            />
-        )}
-        {activeSubTab === 'setup' && (
-            <SetupView 
-                {...props} 
-                categoryConfig={activeCategoryConfig} 
-                filteredMaterialCategories={filteredMaterialCategories} 
-                filteredStockItems={filteredStockItems}
-                filteredProductCategories={filteredProductCategories}
-                onOpenProductTypeModal={(config) => {
-                    setEditingProductType(config);
-                    setIsProductTypeModalOpen(true);
-                }}
-            />
-        )}
-        {activeSubTab === 'reports' && (
-            <InventoryReportsView 
-                {...props} 
-                categoryConfig={activeCategoryConfig} 
-                filteredStockItems={filteredStockItems} 
-                filteredInventory={filteredInventory} 
-                filteredProductCategories={filteredProductCategories}
-            />
-        )}
-      </div>
-
-      <Modal isOpen={isProductTypeModalOpen} onClose={() => setIsProductTypeModalOpen(false)} title={editingProductType ? "Modify Product Configuration" : "Establish New Product Type"}>
-          <ConfigModalContent 
-              initialData={editingProductType} 
-              module={activeCategoryTab}
-              onSave={async (data) => {
-                  if (editingProductType) await props.onUpdateProductCategory(editingProductType.id, data);
-                  else await props.onAddProductCategory(data as any);
-                  setIsProductTypeModalOpen(false);
-              }}
-          />
-      </Modal>
-    </div>
-  );
-};
-
-interface InventoryDashboardViewProps extends InventoryViewProps {
-    categoryConfig: { id: string, label: string, type: string };
-    filteredStockItems: StockItem[];
-    filteredInventory: InventoryItem[];
-    filteredProductCategories: ProductCategory[];
+  </div>;
 }
 
-const InventoryDashboardView: React.FC<InventoryDashboardViewProps> = ({ 
-    categoryConfig, filteredStockItems, filteredInventory, filteredProductCategories,
-    onStockIn, onStockOut, onAddInventoryItem, onUpdateInventoryItem, onDeleteInventoryItem 
-}) => {
-    const [isStockInOpen, setIsStockInOpen] = useState(false);
-    const [isStockOutOpen, setIsStockOutOpen] = useState(false);
-    const { addToast } = useToast();
-    
-    const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState<InventoryItem | null>(null);
-    const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
-    const [productToDelete, setProductToDelete] = useState<InventoryItem | null>(null);
+function MaterialResaleForm({ item, onSave }: { item: StockItem; onSave: (units: number, price: number) => void }) {
+  const [units, setUnits] = useState('1'), [price, setPrice] = useState(item.resalePrice === undefined ? '' : String(item.resalePrice));
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (Number(units) >= 1 && Number(units) <= item.unitsOnHand! && Number.isSafeInteger(Number(units))) onSave(Number(units), Number(price)); }}>
+    <p className="font-bold">{item.itemName}</p><p className="text-sm text-gray-500">Available: {item.unitsOnHand} unopened {item.unit || 'roll'} units. <InfoTooltip label="Resale information">Stock is reserved only when the sale is saved.</InfoTooltip></p>
+    <Numeric label="Whole unopened units to sell" value={units} onChange={setUnits} /><Numeric label="Selling price per unit (UGX)" value={price} onChange={setPrice} step="any" />
+    {Number(units) > item.unitsOnHand! && <p role="alert" className="text-red-600">Quantity exceeds available unopened stock.</p>}
+    <button className={primary} disabled={Number(units) < 1 || Number(units) > item.unitsOnHand!}>Continue to invoice</button>
+  </form>;
+}
+function ReceiveForm({ item, product, admin, onSave }: { item: StockItem | InventoryItem; product: boolean; admin: boolean; onSave: (input: { units: number; unitCost: number; supplier: string; paymentStatus: 'Paid' | 'Credit'; freightTotal: number; reference: string }) => Promise<void> }) {
+  const [units, setUnits] = useState(''), [cost, setCost] = useState(''), [freight, setFreight] = useState('0'), [supplier, setSupplier] = useState(''), [reference, setReference] = useState('');
+  const [payment, setPayment] = useState<'Paid' | 'Credit'>('Paid');
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave({ units: Number(units), unitCost: Number(cost), supplier, paymentStatus: payment, freightTotal: Number(freight), reference }); }}><div className="flex justify-end"><InfoTooltip label="Form information">Enter this receipt's invoice price. Freight is spread across units. Material purchases belong in inventory, not operating expenses.</InfoTooltip></div><p className="font-bold">{product ? (item as InventoryItem).name : (item as StockItem).itemName}</p>
+    <div className="grid sm:grid-cols-2 gap-4"><Numeric label="Units received" value={units} onChange={setUnits} /><Numeric label="Invoice unit price (UGX)" value={cost} onChange={setCost} step="any" /><Numeric label="Freight total (UGX, optional)" value={freight} onChange={setFreight} step="any" required={false} /><Field label="Payment status"><select className={input} value={payment} onChange={e => setPayment(e.target.value as 'Paid' | 'Credit')}><option>Paid</option><option>Credit</option></select></Field></div><Field label="Supplier"><input className={input} value={supplier} onChange={e => setSupplier(e.target.value)} required /></Field><Field label="Invoice / reference (optional)"><input className={input} value={reference} onChange={e => setReference(e.target.value)} /></Field>
+    {admin && Number(units) > 0 && cost !== '' && <p>Landed receipt value: <strong>{ugx(Number(units) * Number(cost) + Number(freight))}</strong></p>}<button className={primary}>Confirm receipt</button></form>;
+}
+function StartForm({ item, admin, onSave }: { item: StockItem; admin: boolean; onSave: (module: Department, notes: string, override: boolean) => Promise<void> }) {
+  const [module, setModule] = useState<Department>(item.module as Department), [notes, setNotes] = useState(''), [override, setOverride] = useState(false);
+  const short = (item.unitsOnHand ?? 0) < 1;
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(module, notes, override); }}><p className="font-bold">{item.itemName}</p><InfoTooltip label="Start unit information">Starting one {item.unit || 'roll'} removes it from unopened stock. The latest average cost is read on confirmation.</InfoTooltip>{admin && <p className="p-4 rounded-xl bg-yellow-50">Cost charged to COGS: <strong>{ugx(item.avgCostPerUnit ?? 0)}</strong></p>}<Field label="Department charged"><select className={input} value={module} onChange={e => setModule(e.target.value as Department)} required>{departments.map(d => <option value={d.id} key={d.id}>{d.label}</option>)}</select></Field><Field label="Notes (optional)"><textarea className={input} value={notes} onChange={e => setNotes(e.target.value)} /></Field>{admin && short && <label className="block text-sm text-red-700"><input type="checkbox" checked={override} onChange={e => setOverride(e.target.checked)} /> Admin override: allow negative stock and record this override.</label>}<button className={primary} disabled={short && !override}>Confirm start</button></form>;
+}
+function MaterialForm({ item, module, onSave }: { item: MaterialCategory | null; module: Department; onSave: (name: string, unit: StockUnit) => Promise<void> }) {
+  const [name, setName] = useState(item?.name || ''), [unit, setUnit] = useState<StockUnit>(item?.unitType || 'roll');
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(name, unit); }}><div className="flex justify-end"><InfoTooltip label="Form information">Save, then add widths, paper sizes or colours as variants.</InfoTooltip></div><p>{departments.find(d => d.id === module)?.label}</p><Field label="Material name"><input className={input} value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Flex Banner or Toner" /></Field><Field label="Unit type"><select className={input} disabled={!!item} value={unit} onChange={e => setUnit(e.target.value as StockUnit)}>{stockUnits.map(u => <option key={u}>{u}</option>)}</select></Field><button className={primary}>Save material</button></form>;
+}
+function VariantsForm({ category, onSave }: { category: MaterialCategory; onSave: (text: string, reorder: number, length?: number) => Promise<void> }) {
+  const [text, setText] = useState(''), [reorder, setReorder] = useState('1'), [length, setLength] = useState('');
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(text, Number(reorder), length === '' ? undefined : Number(length)); }}><div className="flex justify-end"><InfoTooltip label="Form information">Up to 40 variants. Each opens at zero; Receive stock records purchases.</InfoTooltip></div><p className="font-bold">{category.name} · {category.unitType || 'roll'}</p><Field label="Variants, separated by commas or new lines"><textarea className={input} rows={4} value={text} onChange={e => setText(e.target.value)} required placeholder={(category.unitType || 'roll') === 'roll' ? '1.07, 1.1, 1.3, 1.6, 1.8' : 'A3, A4 or Cyan, Magenta, Yellow, Black'} /></Field><Numeric label="Reorder level (unopened units)" value={reorder} onChange={setReorder} />{(category.unitType || 'roll') === 'roll' && <Numeric label="Roll length in meters (reference only, optional)" value={length} onChange={setLength} step="any" required={false} />}<button className={primary}>Create variants</button></form>;
+}
+function VariantForm({ item, onSave, onActive }: { item: StockItem; onSave: (name: string, reorder: number, length?: number) => Promise<void>; onActive: () => void }) {
+  const [name, setName] = useState(item.itemName), [reorder, setReorder] = useState(String(item.reorderLevel)), [length, setLength] = useState(item.rollLengthMeters === undefined ? '' : String(item.rollLengthMeters));
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(name, Number(reorder), length === '' ? undefined : Number(length)); }}><div className="flex justify-end"><InfoTooltip label="Form information">Quantity and average cost cannot be edited here.</InfoTooltip></div><Field label="Variant display name"><input className={input} value={name} onChange={e => setName(e.target.value)} required /></Field><Numeric label="Reorder level (units, not meters)" value={reorder} onChange={setReorder} />{(item.unit || 'roll') === 'roll' && <Numeric label="Roll length in meters (reference only)" value={length} onChange={setLength} step="any" required={false} />}<div className="flex gap-3"><button className={primary}>Save setup</button><button type="button" className={secondary} onClick={onActive}>{item.isActive === false ? 'Reactivate' : 'Deactivate'}</button></div></form>;
+}
+function ProductForm({ item, module, categories, onSave }: { item: InventoryItem | null; module: Department; categories: ProductCategory[]; onSave: (data: ProductDetails, opening: number, cost?: number) => Promise<void> }) {
+  const [data, setData] = useState<ProductDetails>({ name: item?.name || '', category: item?.category || '', module, sku: item?.sku || '', price: item?.price ?? 0, minPrice: item?.minPrice ?? 0, minStockLevel: item?.minStockLevel ?? 1, attr1: item?.attr1 || '', attr2: item?.attr2 || '', attr3: item?.attr3 || '', attr4: item?.attr4 || '', attr5: item?.attr5 || '' });
+  const [opening, setOpening] = useState('0'), [cost, setCost] = useState('');
+  const needsCost = !item || missingCost(item), category = categories.find(c => c.name === data.category);
+  const set = <K extends keyof ProductDetails>(key: K, value: ProductDetails[K]) => setData({ ...data, [key]: value });
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(data, Number(opening), needsCost ? Number(cost) : undefined); }}><div className="grid sm:grid-cols-2 gap-4"><Field label="Product name"><input className={input} value={data.name} onChange={e => set('name', e.target.value)} required /></Field><Field label="SKU"><input className={input} value={data.sku} onChange={e => set('sku', e.target.value)} /></Field><Field label="Product category"><select className={input} value={data.category} onChange={e => set('category', e.target.value)} required><option value="">Choose category</option>{item?.category && !categories.some(c => c.name === item.category) && <option>{item.category}</option>}{categories.filter(c => c.isActive !== false || c.name === item?.category).map(c => <option key={c.id}>{c.name}</option>)}</select></Field><Numeric label="Selling price (UGX)" value={String(data.price)} onChange={v => set('price', Number(v))} step="any" /><Numeric label="Minimum selling price (UGX)" value={String(data.minPrice)} onChange={v => set('minPrice', Number(v))} step="any" /><Numeric label="Reorder level (units)" value={String(data.minStockLevel)} onChange={v => set('minStockLevel', Number(v))} />{!item && <Numeric label="Opening quantity (creation only)" value={opening} onChange={setOpening} />}{needsCost ? <Numeric label={item ? 'Reviewed purchase price (UGX)' : 'Purchase price per unit (UGX)'} value={cost} onChange={setCost} step="any" /> : <p className="text-sm">Current purchase cost: {ugx(item.avgCost ?? item.purchasePrice!)} <InfoTooltip label="Purchase cost information">Restock updates weighted average cost.</InfoTooltip></p>}
+      {(['attr1', 'attr2', 'attr3', 'attr4', 'attr5'] as const).map((key, i) => { const label = category?.[`field${i + 1}` as 'field1' | 'field2' | 'field3' | 'field4' | 'field5']; return label ? <Field key={key} label={label}><input className={input} value={data[key]} onChange={e => set(key, e.target.value)} /></Field> : null; })}</div>{item && <p className="text-xs text-gray-500">Current quantity: {item.quantity} <InfoTooltip label="Quantity information">Use Restock to add units; quantity cannot be edited in this form.</InfoTooltip></p>}<button className={primary}>Save product</button></form>;
+}
+function ProductCategoryForm({ item, onSave }: { item: ProductCategory | null; onSave: (name: string, fields: string[]) => Promise<void> }) {
+  const [name, setName] = useState(item?.name || ''), [fields, setFields] = useState([item?.field1 || '', item?.field2 || '', item?.field3 || '', item?.field4 || '', item?.field5 || '']);
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(name, fields); }}><Field label="Category name"><input className={input} value={name} readOnly={!!item} onChange={e => setName(e.target.value)} required /></Field>{fields.map((value, i) => <Field label={`Attribute ${i + 1} label (optional)`} key={i}><input className={input} value={value} onChange={e => setFields(fields.map((v, index) => index === i ? e.target.value : v))} /></Field>)}<button className={primary}>Save category</button></form>;
+}
+function TierForm({ item, categories, onSave }: { item: PricingTier | null; categories: MaterialCategory[]; onSave: (id: string, name: string, value: number) => Promise<void> }) {
+  const [category, setCategory] = useState(item?.categoryId || ''), [name, setName] = useState(item?.name || ''), [value, setValue] = useState(item ? String(item.value) : '');
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(category, name, Number(value)); }}><Field label="Material"><select className={input} value={category} onChange={e => setCategory(e.target.value)} required><option value="">Choose material</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="Tier name"><input className={input} value={name} onChange={e => setName(e.target.value)} required /></Field><Numeric label="Calculator tier value (UGX)" value={value} onChange={setValue} step="any" /><button className={primary}>Save tier</button></form>;
+}
 
-    const lowStockAlerts = useMemo(() => {
-        const alerts: (StockItem | InventoryItem)[] = [];
-        if (categoryConfig.type === 'stock' || categoryConfig.type === 'mixed') alerts.push(...filteredStockItems.filter(item => (item.totalStockMeters || 0) <= item.reorderLevel));
-        if (categoryConfig.type === 'product' || categoryConfig.type === 'mixed') alerts.push(...filteredInventory.filter(item => item.quantity <= (item.minStockLevel || 5)));
-        return alerts;
-    }, [filteredStockItems, filteredInventory, categoryConfig]);
-
-    const confirmDeleteProduct = async () => {
-        if (productToDelete) {
-            await onDeleteInventoryItem(productToDelete.id);
-            setProductToDelete(null);
-        }
-    };
-    
-    const handleLogUsage = async (item: InventoryItem) => {
-        if (item.quantity <= 0) {
-            addToast(`Cannot log usage. "${item.name}" is out of stock.`, "error");
-            return;
-        }
-        await onUpdateInventoryItem(item.id, { quantity: item.quantity - 1 });
-        addToast(`Usage logged for "${item.name}".`, "success");
-    };
-
-    const showStockSection = categoryConfig.type === 'stock' || categoryConfig.type === 'mixed';
-    const showProductSection = categoryConfig.type === 'product' || categoryConfig.type === 'mixed';
-
-    return (
-        <div className="fade-in space-y-10">
-             {lowStockAlerts.length > 0 && (
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border-l-4 border-yellow-400">
-                    <h3 className="text-sm font-black text-yellow-600 uppercase tracking-widest mb-6 flex items-center">
-                        <AlertTriangleIcon className="w-5 h-5 mr-3" /> Low Stock Alerts
-                    </h3>
-                    <div className="space-y-1">
-                        {lowStockAlerts.map((item: any) => (
-                            <div key={item.skuId || item.id} className="flex justify-between items-center p-3 rounded-xl bg-yellow-400/5 hover:bg-yellow-400/10 transition-colors">
-                                <span className="text-[11px] font-black text-yellow-800 uppercase tracking-tight">{item.itemName || item.name}</span>
-                                <span className="text-[10px] font-black text-yellow-600 uppercase">
-                                    {item.skuId ? `In Stock: ${(item.totalStockMeters || 0).toFixed(1)}m` : `In Stock: ${item.quantity}`}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {showStockSection && (
-                <div>
-                    <div className="flex justify-between items-center mb-6 px-1">
-                        <h3 className="text-[13px] font-black text-gray-800 uppercase tracking-widest">Stock (Rolls/Meters)</h3>
-                        <div className="flex gap-2">
-                             <button onClick={() => setIsStockInOpen(true)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl hover:bg-emerald-700 text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95">Stock-In</button>
-                             <button onClick={() => setIsStockOutOpen(true)} className="bg-rose-600 text-white px-5 py-2 rounded-xl hover:bg-rose-700 text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95">Stock-Out</button>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
-                                <tr>
-                                    <th className="px-8 py-5">Item Name</th>
-                                    <th className="px-8 py-5 text-center">Width</th>
-                                    <th className="px-8 py-5 text-center">Stock</th>
-                                    <th className="px-8 py-5 text-center">Min</th>
-                                    <th className="px-8 py-5 text-right">Price/Roll</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredStockItems.map(item => (
-                                    <tr key={item.skuId} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-8 py-5 font-black text-gray-900 uppercase tracking-tight">{item.itemName}</td>
-                                        <td className="px-8 py-5 text-center font-bold text-gray-500">{item.width}m</td>
-                                        <td className="px-8 py-5 text-center font-black text-gray-800">{(item.totalStockMeters || 0).toFixed(1)}m</td>
-                                        <td className="px-8 py-5 text-center font-bold text-gray-400">{item.reorderLevel}m</td>
-                                        <td className="px-8 py-5 text-right font-black text-gray-900">{formatUGX(item.lastPurchasePricePerRoll_UGX)}</td>
-                                    </tr>
-                                ))}
-                                {filteredStockItems.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="px-8 py-20 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Zero material volume detected</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-             {showProductSection && (
-                <div>
-                    <div className="flex justify-between items-center mb-6 px-1">
-                        <h3 className="text-[13px] font-black text-gray-800 uppercase tracking-widest">Inventory Management</h3>
-                        <button onClick={() => { setEditingProduct(null); setIsProductModalOpen(true); }} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 text-[10px] font-black uppercase tracking-widest shadow-xl transition-all active:scale-95">Add Item</button>
-                    </div>
-                    <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
-                                <tr>
-                                    <th className="px-8 py-5">Item Name</th>
-                                    <th className="px-8 py-5">Specification</th>
-                                    <th className="px-8 py-5 text-center">Qty</th>
-                                    <th className="px-8 py-5 text-center">Min</th>
-                                    <th className="px-8 py-5 text-right">Unit Price</th>
-                                    <th className="px-8 py-5 text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredInventory.map(item => {
-                                    const config = filteredProductCategories.find(c => c.name === item.category);
-                                    return (
-                                        <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-8 py-5 font-black text-gray-900 uppercase tracking-tight">{item.name}</td>
-                                            <td className="px-8 py-5">
-                                                {config ? (
-                                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 max-w-xs text-[10px] font-bold text-gray-500 uppercase">
-                                                        {config.field1 && item.attr1 && <span>{config.field1}: {item.attr1}</span>}
-                                                        {config.field2 && item.attr2 && <span>{config.field2}: {item.attr2}</span>}
-                                                        {config.field3 && item.attr3 && <span>{config.field3}: {item.attr3}</span>}
-                                                        {config.field4 && item.attr4 && <span>{config.field4}: {item.attr4}</span>}
-                                                    </div>
-                                                ) : <span className="text-[10px] text-gray-400 italic">Uncategorized</span>}
-                                            </td>
-                                            <td className="px-8 py-5 text-center font-black text-gray-800">{item.quantity}</td>
-                                            <td className="px-8 py-5 text-center font-bold text-gray-400">{item.minStockLevel}</td>
-                                            <td className="px-8 py-5 text-right">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="font-black text-gray-900">{formatUGX(item.price)}</span>
-                                                    <span className="text-[8px] text-rose-500 font-black uppercase tracking-tighter mt-0.5">Min: {formatUGX(item.minPrice).replace(' UGX', '')}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-5 text-center">
-                                                <div className="flex justify-center items-center space-x-2">
-                                                    <button onClick={() => handleLogUsage(item)} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-all hover:scale-110" title="Log Usage"><BeakerIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setEditingProduct(item); setIsProductModalOpen(true); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all hover:scale-110" title="Edit Record"><EditIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setProductToDelete(item); setIsConfirmDeleteOpen(true); }} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all hover:scale-110" title="Delete Entry"><TrashIcon className="w-4 h-4" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                {filteredInventory.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} className="px-8 py-20 text-center text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Void warehouse inventory</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-             )}
-            
-            <StockInModal isOpen={isStockInOpen} onClose={() => setIsStockInOpen(false)} stockItems={filteredStockItems} onStockIn={onStockIn} />
-            <StockOutModal isOpen={isStockOutOpen} onClose={() => setIsStockOutOpen(false)} stockItems={filteredStockItems} onStockOut={onStockOut} />
-            <ProductModal 
-                isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} product={editingProduct} 
-                productCategories={filteredProductCategories}
-                module={categoryConfig.id}
-                onSave={async (data) => {
-                    if (editingProduct) await onUpdateInventoryItem(editingProduct.id, data);
-                    else await onAddInventoryItem(data as any);
-                    setIsProductModalOpen(false);
-                }}
-            />
-            <ConfirmationModal isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} onConfirm={confirmDeleteProduct} title="Purge Record" message={`Authorize permanent removal of this item from the warehouse directory?`} />
-        </div>
-    );
-};
-
-const GeneralSetupView: React.FC<SetupViewProps> = ({ 
-    categoryConfig, filteredMaterialCategories, onAddCategory, onUpdateCategory, onDeleteCategory,
-    filteredStockItems, onAddStockItem, onUpdateStockItem, onDeleteStockItem 
-}) => {
-    const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
-    const [catName, setCatName] = useState('');
-    const [isAddSkuModalOpen, setIsAddSkuModalOpen] = useState(false);
-    const [selectedCatId, setSelectedCatId] = useState('');
-    const [skuName, setSkuName] = useState('');
-    const [width, setWidth] = useState(0);
-    const [reorder, setReorder] = useState(50);
-
-    const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-    const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-
-    return (
-        <div className="space-y-8">
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} Material Categories</h3>
-                    <button onClick={() => setIsAddCatModalOpen(true)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
-                        <PlusIcon className="w-4 h-4 mr-2"/> Add Category
-                    </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {filteredMaterialCategories.map(cat => (
-                        <div key={cat.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
-                            <span className="font-black text-[11px] text-gray-900 uppercase tracking-tight">{cat.name}</span>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => { const n = prompt('New name:', cat.name); if(n) onUpdateCategory(cat.id, n); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><EditIcon className="w-4 h-4"/></button>
-                                <button onClick={() => onDeleteCategory(cat)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><TrashIcon className="w-4 h-4"/></button>
-                            </div>
-                        </div>
-                    ))}
-                    {filteredMaterialCategories.length === 0 && <p className="col-span-full text-center py-6 text-gray-300 font-bold italic text-xs">No unit categories for this module</p>}
-                </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">{categoryConfig.label} SKUs</h3>
-                    <button onClick={() => setIsAddSkuModalOpen(true)} className="bg-yellow-400 text-[#1A2232] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-yellow-500 active:scale-95 transition-all flex items-center">
-                        <PlusIcon className="w-4 h-4 mr-2"/> Define SKU
-                    </button>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50/50 text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                            <tr>
-                                <th className="px-6 py-4">Item Name</th>
-                                <th className="px-6 py-4 text-center">Category</th>
-                                <th className="px-6 py-4 text-center">Width</th>
-                                <th className="px-6 py-4 text-center">Reorder Level</th>
-                                <th className="px-6 py-4 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredStockItems.map(item => (
-                                <tr key={item.skuId} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 font-black text-gray-900 uppercase tracking-tight">{item.itemName}</td>
-                                    <td className="px-6 py-4 text-center font-bold text-gray-500 text-[10px] uppercase">{filteredMaterialCategories.find(c => c.id === item.categoryId)?.name || '-'}</td>
-                                    <td className="px-6 py-4 text-center font-black text-gray-600">{item.width}m</td>
-                                    <td className="px-6 py-4 text-center font-bold text-gray-400">{item.reorderLevel}m</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={() => { const r = prompt('New reorder level:', String(item.reorderLevel)); if(r) onUpdateStockItem(item.skuId, parseInt(r)); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><EditIcon className="w-4 h-4"/></button>
-                                            <button onClick={() => onDeleteStockItem(item.skuId)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><TrashIcon className="w-4 h-4"/></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <Modal isOpen={isAddCatModalOpen} onClose={() => setIsAddCatModalOpen(false)} title={`New ${categoryConfig.label} Category`}>
-                <form onSubmit={e => { e.preventDefault(); onAddCategory(catName, categoryConfig.id); setIsAddCatModalOpen(false); setCatName(''); }} className="space-y-6">
-                    <div>
-                        <label className={labelStyle}>Material Specification Label</label>
-                        <input type="text" value={catName} onChange={e => setCatName(e.target.value)} className={darkInput} placeholder="e.g. Premium Banner" required />
-                    </div>
-                    <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Authorize Registry</button>
-                </form>
-            </Modal>
-
-            <Modal isOpen={isAddSkuModalOpen} onClose={() => setIsAddSkuModalOpen(false)} title={`New ${categoryConfig.label} Stock Record`}>
-                <form onSubmit={e => { e.preventDefault(); onAddStockItem(selectedCatId, width, reorder, skuName, categoryConfig.id); setIsAddSkuModalOpen(false); }} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2">
-                            <label className={labelStyle}>Material Classification</label>
-                            <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className={darkInput} required>
-                                <option value="" className="bg-gray-800">Assign Category...</option>
-                                {filteredMaterialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className={labelStyle}>Record Designation (SKU Name)</label>
-                            <input type="text" value={skuName} onChange={e => setSkuName(e.target.value)} className={darkInput} placeholder="e.g. 107 Matt Vinyl" required />
-                        </div>
-                        <div>
-                            <label className={labelStyle}>Roll Width (m)</label>
-                            <input type="number" step="0.01" value={width} onChange={e => setWidth(parseFloat(e.target.value))} className={darkInput} required />
-                        </div>
-                        <div>
-                            <label className={labelStyle}>Replenishment Threshold (m)</label>
-                            <input type="number" value={reorder} onChange={e => setReorder(parseInt(e.target.value) || 0)} className={darkInput} required />
-                        </div>
-                    </div>
-                    <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all mt-4">Commit Inventory Logic</button>
-                </form>
-            </Modal>
-        </div>
-    );
-};
-
-const PricingSetupView: React.FC<SetupViewProps> = ({ filteredMaterialCategories, pricingTiers, onAddTier, onUpdateTier, onDeleteTier }) => {
-    const [isAddTierModalOpen, setIsAddTierModalOpen] = useState(false);
-    const [selectedCatId, setSelectedCatId] = useState('');
-    const [tierName, setTierName] = useState('');
-    const [value, setValue] = useState(0);
-
-    const groupedTiers = useMemo(() => {
-        const groups: Record<string, PricingTier[]> = {};
-        const validCatIds = new Set(filteredMaterialCategories.map(c => c.id));
-        
-        pricingTiers.forEach(tier => {
-            if (validCatIds.has(tier.categoryId)) {
-                if (!groups[tier.categoryId]) groups[tier.categoryId] = [];
-                groups[tier.categoryId].push(tier);
-            }
-        });
-        
-        return filteredMaterialCategories.map(cat => ({
-            id: cat.id,
-            name: cat.name,
-            tiers: groups[cat.id] || []
-        }));
-    }, [pricingTiers, filteredMaterialCategories]);
-
-    const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-    const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-
-    return (
-        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100">
-            <div className="flex justify-between items-center mb-10">
-                <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Rate Card Architecture (UGX/cm²)</h3>
-                <button onClick={() => setIsAddTierModalOpen(true)} className="bg-yellow-400 text-[#1A2232] px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 active:scale-95 transition-all shadow-md flex items-center">
-                    <PlusIcon className="w-4 h-4 mr-2"/> Define Rate
-                </button>
-            </div>
-            
-            <div className="space-y-12">
-                {groupedTiers.map(group => (
-                    <div key={group.id} className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.3em] whitespace-nowrap">{group.name}</h4>
-                            <div className="h-[2px] flex-1 bg-blue-50"></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            {group.tiers.map(tier => (
-                                <div key={tier.id} className="bg-gray-50 p-6 rounded-[1.8rem] border border-gray-100 group hover:border-yellow-400 hover:shadow-lg transition-all relative overflow-hidden">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Tier Designation</p>
-                                    <h5 className="text-xl font-black text-gray-900 tracking-tight mb-4 uppercase">{tier.name}</h5>
-                                    
-                                    <div className="bg-white p-4 rounded-2xl shadow-inner border border-gray-100">
-                                        <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Valuation Multiplier</p>
-                                        <p className="text-2xl font-black text-[#1A2232] font-mono tracking-tighter">{(tier.value || 0).toFixed(4)} <span className="text-[10px] text-gray-400">UGX/cm²</span></p>
-                                    </div>
-
-                                    <div className="mt-5 flex gap-2">
-                                        <button onClick={() => { const v = prompt('New multiplier:', String(tier.value)); if(v) onUpdateTier(tier.id, tier.name, parseFloat(v)); }} className="flex-1 py-2 bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-100 transition-all">Edit Rate</button>
-                                        <button onClick={() => onDeleteTier(tier.id)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"><TrashIcon className="w-5 h-5"/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-                {groupedTiers.length === 0 && <div className="text-center py-20 text-gray-300 font-black uppercase tracking-[0.4em] text-xs">Void financial schema</div>}
-            </div>
-
-            <Modal isOpen={isAddTierModalOpen} onClose={() => setIsAddTierModalOpen(false)} title="Register Valuation Tier">
-                <form onSubmit={e => { e.preventDefault(); onAddTier(tierName, value, selectedCatId); setIsAddTierModalOpen(false); }} className="space-y-6">
-                    <div>
-                        <label className={labelStyle}>Material Mapping</label>
-                        <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className={darkInput} required>
-                            <option value="" className="bg-gray-800">Select Classification...</option>
-                            {filteredMaterialCategories.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Tier Branding</label>
-                        <input type="text" value={tierName} onChange={e => setTierName(e.target.value)} className={darkInput} placeholder="e.g. Standard Retail" required />
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Rate Multiplier (UGX per CM²)</label>
-                        <input type="number" step="0.0001" value={value} onChange={e => setValue(parseFloat(e.target.value))} className={`${darkInput} text-xl text-yellow-400 font-mono`} placeholder="0.0000" required />
-                    </div>
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl active:scale-95 transition-all mt-4 border border-yellow-400/20">Commit Pricing Node</button>
-                </form>
-            </Modal>
-        </div>
-    );
-};
-
-const InventoryReportsView: React.FC<InventoryDashboardViewProps> = ({ filteredStockItems, filteredInventory }) => {
-    const totalStockValue = filteredStockItems.reduce((acc, item) => acc + ((item.totalStockMeters || 0) / ROLL_LENGTH_METERS) * item.lastPurchasePricePerRoll_UGX, 0);
-    const totalInventoryValue = filteredInventory.reduce((acc, item) => acc + item.quantity * item.price, 0);
-
-    return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border-l-8 border-blue-500 relative overflow-hidden group">
-                <div className="relative z-10">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-2">Estimated Raw Material Value</h3>
-                    <p className="text-4xl font-black text-[#1A2232] tracking-tighter">{formatUGX(totalStockValue)}</p>
-                    <p className="mt-4 text-[9px] text-gray-400 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full w-fit">Valued at Current Roll Replenishment Costs</p>
-                </div>
-                <InventoryIcon className="absolute right-0 bottom-0 w-32 h-32 text-blue-500 opacity-5 -mr-6 -mb-6" />
-            </div>
-            
-            <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border-l-8 border-emerald-500 relative overflow-hidden group">
-                <div className="relative z-10">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-2">Warehouse Product Asset Value</h3>
-                    <p className="text-4xl font-black text-[#1A2232] tracking-tighter">{formatUGX(totalInventoryValue)}</p>
-                    <p className="mt-4 text-[9px] text-gray-400 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full w-fit">Aggregate Preferred Market Selling Price</p>
-                </div>
-                <InventoryIcon className="absolute right-0 bottom-0 w-32 h-32 text-emerald-500 opacity-5 -mr-6 -mb-6" />
-            </div>
-        </div>
-    );
-};
-
-const StockInModal: React.FC<{
-    isOpen: boolean; onClose: () => void; stockItems: StockItem[]; 
-    onStockIn: (skuId: string, rolls: number, price: number, notes: string) => Promise<void>;
-}> = ({ isOpen, onClose, stockItems, onStockIn }) => {
-    const [skuId, setSkuId] = useState('');
-    const [rolls, setRolls] = useState(0);
-    const [price, setPrice] = useState(0);
-    const [notes, setNotes] = useState('');
-
-    const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-    const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Inventory Acquisition Protocol">
-            <form onSubmit={async e => { e.preventDefault(); await onStockIn(skuId, rolls, price, notes); onClose(); }} className="space-y-6">
-                <div>
-                    <label className={labelStyle}>Resource Selection</label>
-                    <select value={skuId} onChange={e => setSkuId(e.target.value)} className={darkInput} required>
-                        <option value="" className="bg-gray-800">Identify SKU...</option>
-                        {stockItems.map(i => <option key={i.skuId} value={i.skuId} className="bg-gray-800">{i.itemName}</option>)}
-                    </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelStyle}>Batch Quantity (Rolls)</label>
-                        <input type="number" step="0.5" value={rolls} onChange={e => setRolls(parseFloat(e.target.value))} className={darkInput} required />
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Current Cost / Roll</label>
-                        <input type="number" value={price} onChange={e => setPrice(parseInt(e.target.value))} className={`${darkInput} text-yellow-400 font-mono`} placeholder="0" required />
-                    </div>
-                </div>
-                <div>
-                    <label className={labelStyle}>Verification Narration</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} className={`${darkInput} min-h-[100px] resize-none`} placeholder="Provider details, lot numbers, or arrival condition..."></textarea>
-                </div>
-                <button type="submit" className="w-full bg-emerald-600 text-white py-5 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl active:scale-95 transition-all mt-2 border border-emerald-500/20">Authorize Stock Replenishment</button>
-            </form>
-        </Modal>
-    );
-};
-
-const StockOutModal: React.FC<{
-    isOpen: boolean; onClose: () => void; stockItems: StockItem[]; 
-    onStockOut: (skuId: string, meters: number, jobId: string, notes: string) => Promise<void>;
-}> = ({ isOpen, onClose, stockItems, onStockOut }) => {
-    const [skuId, setSkuId] = useState('');
-    const [meters, setMeters] = useState(0);
-    const [jobId, setJobId] = useState('');
-    const [notes, setNotes] = useState('');
-
-    const labelStyle = "block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5";
-    const darkInput = "mt-1 block w-full rounded-xl border-none bg-gray-800 p-3 text-sm font-bold text-white shadow-inner focus:ring-2 focus:ring-yellow-400 outline-none transition-all placeholder-gray-500";
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Manual Consumption Entry">
-            <form onSubmit={async e => { e.preventDefault(); await onStockOut(skuId, meters, jobId, notes); onClose(); }} className="space-y-6">
-                <div>
-                    <label className={labelStyle}>Source Roll Identification</label>
-                    <select value={skuId} onChange={e => setSkuId(e.target.value)} className={darkInput} required>
-                        <option value="" className="bg-gray-800">Identify Material...</option>
-                        {stockItems.map(i => <option key={i.skuId} value={i.skuId} className="bg-gray-800">{i.itemName} ({(i.totalStockMeters || 0).toFixed(1)}m available)</option>)}
-                    </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelStyle}>Yield Consumption (m)</label>
-                        <input type="number" step="0.1" value={meters} onChange={e => setMeters(parseFloat(e.target.value))} className={darkInput} required />
-                    </div>
-                    <div>
-                        <label className={labelStyle}>Project/Job Reference</label>
-                        <input type="text" value={jobId} onChange={e => setJobId(e.target.value)} className={darkInput} placeholder="INV-00000" required />
-                    </div>
-                </div>
-                <div>
-                    <label className={labelStyle}>Calibration Notes</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} className={`${darkInput} min-h-[100px] resize-none`} placeholder="Reason for manual adjustment..."></textarea>
-                </div>
-                <button type="submit" className="w-full bg-rose-600 text-white py-5 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl active:scale-95 transition-all mt-2 border border-rose-500/20">Authorize Material Deduction</button>
-            </form>
-        </Modal>
-    );
-};
-
-export default InventoryView;
+function ResalePriceForm({ item, onSave }: { item: StockItem; onSave: (price: number) => Promise<void> }) {
+  const [price, setPrice] = useState(item.resalePrice === undefined ? '' : String(item.resalePrice));
+  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); void onSave(Number(price)); }}><p className="font-bold">{item.itemName}</p><Numeric label="Selling price per unopened unit (UGX)" value={price} onChange={setPrice} step="any" /><button className={primary}>Save selling price</button></form>;
+}

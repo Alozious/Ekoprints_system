@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:accounting": "node --experimental-strip-types --test reportAccounting.test.mjs stockService.test.mjs statementExport.test.mjs",
+    "test:inventory": "node --experimental-strip-types --test stockMath.test.mjs inventorySetup.test.mjs inventoryView.test.mjs materialResale.test.mjs",
+    "test:stock": "node --experimental-strip-types --test stockMath.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

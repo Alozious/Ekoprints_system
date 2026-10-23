@@ -1,3 +1,4 @@
+import { materialResaleCatalog } from '../materialResale';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { StockItem, PricingTier, SaleItem, InventoryItem, MaterialCategory, ProductCategory, SystemSettings } from '../types';
@@ -46,8 +47,8 @@ const CALCULATOR_TABS = [
     { id: 'dtf', label: 'DTF', type: 'dimension' }, 
     { id: 'embroidery', label: 'EMBROIDERY', type: 'simple' },
     { id: 'bizhub', label: 'BIZHUB', type: 'simple' },
-    { id: 'supplies', label: 'SUPPLIES', type: 'simple' },
-    { id: 'products', label: 'PRODUCTS', type: 'simple' },
+    { id: 'material-sales', label: 'MATERIAL SALES', type: 'simple' },
+    { id: 'products', label: 'OTHER PRODUCTS', type: 'simple' },
     { id: 'others', label: 'OTHERS', type: 'manual' },
 ];
 
@@ -170,8 +171,9 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     // Dimension Calc Logic - Filtered by strict module field
     const availableStockItems = useMemo(() => {
-        return stockItems.filter(item => item.module === activeTab);
-    }, [stockItems, activeTab]);
+        return stockItems.filter(item => item.module === activeTab && item.isActive !== false &&
+            (!item.unit || item.unit === 'roll') && materialCategories.find(c => c.id === item.categoryId)?.isActive !== false);
+    }, [stockItems, activeTab, materialCategories]);
 
     const tiersForSelectedItem = useMemo(() => {
         if (!selectedStockItem) return [];
@@ -215,12 +217,15 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         return (negotiatedDimPrice * dimQuantity) + extraAmount;
     }, [negotiatedDimPrice, dimQuantity, extraAmount]);
 
+    const materialProducts = useMemo(() => materialResaleCatalog(stockItems, materialCategories), [stockItems, materialCategories]);
     const filteredProductCategories = useMemo(() => {
-        return productCategories.filter(cat => cat.module === activeTab);
-    }, [productCategories, activeTab]);
+        if (activeTab === 'material-sales') return [...new Set(materialProducts.map(p => p.category))].map(name => ({ id: name, name, module: 'material-sales', isActive: true }));
+        return productCategories.filter(cat => cat.module === activeTab && cat.isActive !== false);
+    }, [productCategories, activeTab, materialProducts]);
 
     const filteredInventory = useMemo(() => {
-        let items = inventory.filter(item => item.module === activeTab);
+        let items: InventoryItem[] = activeTab === 'material-sales' ? materialProducts : inventory.filter(item => item.module === activeTab && item.isActive !== false &&
+            productCategories.find(c => c.module === activeTab && c.name === item.category)?.isActive !== false);
         
         if (itemSearchQuery.trim()) {
             const query = itemSearchQuery.toLowerCase();
@@ -234,7 +239,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             items = items.filter(i => i.category === selectedProductCategory);
         }
         return items;
-    }, [inventory, selectedProductCategory, activeTab, itemSearchQuery]);
+    }, [inventory, selectedProductCategory, activeTab, itemSearchQuery, productCategories, materialProducts]);
 
     const totalSimplePrice = useMemo(() => {
         return (negotiatedPrice * simpleQuantity) + extraAmount;
@@ -242,6 +247,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     const handleAddDimToQuote = () => {
         if (!selectedStockItem) { addToast("Please select a material/roll.", "error"); return; }
+        if (!availableStockItems.some(item => item.skuId === selectedStockItem)) { addToast('This material is no longer active. Select another material.', 'error'); return; }
         // Restored validation for tiers for both Large Format and custom DTF sizes
         if (!dtfPreset && !selectedTier) { addToast("Please select a pricing tier.", "error"); return; }
         if (totalDimPrice <= 0) { addToast("Calculated price must be greater than zero.", "error"); return; }
@@ -283,7 +289,15 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     const handleAddSimpleToQuote = () => {
         if (!selectedProduct) return;
+        const material = activeTab === 'material-sales' ? materialProducts.find(p => p.id === selectedProduct.id) : undefined;
+        if (!(material || inventory.some(item => item.id === selectedProduct.id && item.isActive !== false)) ||
+            productCategories.find(c => c.module === activeTab && c.name === selectedProduct.category)?.isActive === false) {
+            addToast('This product is no longer active. Select another product.', 'error'); return;
+        }
+        if (material && (!Number.isSafeInteger(simpleQuantity) || simpleQuantity < 1 || simpleQuantity + quoteItems.filter(i => i.materialSkuId === material.materialSkuId).reduce((sum, i) => sum + i.quantity, 0) > material.quantity)) { addToast('Quantity exceeds available unopened material stock.', 'error'); return; }
+        if (!(negotiatedPrice >= 0) || !Number.isFinite(negotiatedPrice) || simpleQuantity < 1) { addToast('Enter a valid selling price and quantity.', 'error'); return; }
         const newItem: SaleItem = {
+            ...(material ? { materialSkuId: material.materialSkuId, stockEntity: 'material' as const, module: material.module as SaleItem['module'] } : { productId: selectedProduct.id, stockEntity: 'product' as const, module: selectedProduct.module as SaleItem['module'] }),
             itemId: `simple-${selectedProduct.id}-${Date.now()}`,
             name: `${selectedProduct.name} ${[selectedProduct.attr1, selectedProduct.attr2].filter(Boolean).join(' | ')}`,
             quantity: simpleQuantity,
@@ -350,7 +364,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             setDtfPreset(meta.dtfPreset || null);
         } else if (meta.type === 'simple') {
             setSelectedProductCategory(meta.selectedProductCategory || '');
-            const p = inventory.find(i => i.id === meta.selectedProductId);
+            const p = [...materialProducts, ...inventory].find(i => i.id === meta.selectedProductId);
             setSelectedProduct(p || null);
             setNegotiatedPrice(meta.negotiatedPrice || 0);
             setSimpleQuantity(item.quantity);
@@ -564,7 +578,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className={labelClass}>Module Filter</label>
+                                    <label className={labelClass}>{activeTab === 'material-sales' ? 'Department / material' : 'Module Filter'}</label>
                                     <select value={selectedProductCategory} onChange={e => setSelectedProductCategory(e.target.value)} className={darkInputClass}>
                                         <option value="">All Categories</option>
                                         {filteredProductCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
@@ -580,7 +594,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         <option value="">Choose Item...</option>
                                         {filteredInventory.map(item => (
                                             <option key={item.id} value={item.id}>
-                                                {item.name} ({formatUGX(item.price).replace(' UGX', '')})
+                                                {item.name} ({formatUGX(item.price).replace(' UGX', '')}){activeTab === 'material-sales' ? ` · ${item.quantity} unopened` : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -588,7 +602,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                             </div>
 
                             {selectedProduct && (
-                                <div className="space-y-6 pt-4 border-t border-gray-50">
+                                <div className="space-y-6 pt-4 border-t border-gray-50">{activeTab === 'material-sales' && <p className="text-sm font-bold">Unopened units available: {selectedProduct.quantity}</p>}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className={labelClass}>Negotiated Unit Price</label>
@@ -601,7 +615,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         </div>
                                         <div>
                                             <label className={labelClass}>Quantity</label>
-                                            <input type="number" min="1" value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
+                                            <input type="number" min="1" max={activeTab === 'material-sales' ? selectedProduct.quantity : undefined} value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
                                         </div>
                                     </div>
                                     

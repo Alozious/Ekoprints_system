@@ -55,6 +55,11 @@ export interface SaleItem {
   stockEntity?: 'material' | 'product';
   module?: AssignedDepartment;
   cogsAtSale?: number;
+  directCosts?: { buyingPrice: number; otherCost: number; otherDescription: string; otherRows?: { description: string; amount: number }[] };
+  showComplementaryOnInvoice?: boolean;
+  complementaryFor?: string;
+  complementaryUnitPrice?: number;
+  complementaryQuantityPerItem?: number;
   productId?: string;
   itemId: string;
   name: string;
@@ -105,6 +110,8 @@ export interface Payment {
 }
 
 export interface Sale {
+  internalComplementary?: boolean;
+  parentSaleId?: string;
   id: string;
   date: string;
   items: SaleItem[];
@@ -252,6 +259,7 @@ export type CostedInventoryItem = InventoryItem & { purchasePrice: number; avgCo
 export type CostedSaleItem = SaleItem & { module: AssignedDepartment; cogsAtSale: number };
 
 export interface PricingTier {
+  preset?: 'A4' | 'A3' | null;
   id: string;
   name: string;
   value: number;

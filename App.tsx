@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { quotationItems } from './kuyiriba';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import DashboardView from './components/DashboardView';
 import SalesView from './components/SalesView';
 import InventoryView from './components/InventoryView';
 import ExpensesView from './components/ExpensesView';
@@ -157,7 +157,7 @@ const App: React.FC = () => {
                 if (userDocSnap.exists()) {
                     const userData = userDocSnap.data() as Omit<User, 'id'>;
                     setCurrentUser({ id: firebaseUser.uid, ...userData });
-                    if (userData.role === 'user') setActiveView('Sales');
+                    if (userData.role === 'user') setActiveView(userData.isBanker ? 'Dashboard' : 'Sales');
                     else setActiveView(window.location.hash.startsWith('#marketing') ? 'Marketing' : 'Dashboard');
                 } else {
                     console.error("User document not found in Firestore!");
@@ -233,6 +233,15 @@ const App: React.FC = () => {
         return runAsyncOperation<void>(operation, successMessage);
     }, [runAsyncOperation]);
 
+    const syncComplementarySale = useCallback(async (saleId: string) => {
+        const linked = await getDoc(doc(db,'sales',saleId+'--complementary'));
+        if(!linked.exists())return;
+        const child={...linked.data(),id:linked.id} as Sale;
+        setSales(previous=>[...previous.filter(s=>s.id!==child.id),...(!child.voidedAt?[child]:[])]);
+        const customer=await getDoc(doc(db,'customers',child.customerId));
+        if(customer.exists())setCustomers(previous=>previous.some(c=>c.id===customer.id)?previous:[...previous,{...customer.data(),id:customer.id} as Customer]);
+    },[]);
+
     const handleAddSale = useCallback(async (saleData: Omit<Sale, 'id'>) => {
         if (!currentUser) throw new Error('Sign in before saving a sale.');
         if (saleSaveLock.current) throw new Error('A sale is already being saved.');
@@ -243,13 +252,13 @@ const App: React.FC = () => {
             const items = await createStockService(db, currentUser).saveSale(id, saleData);
             setSales(previous => [{ ...saleData, id, items, inventoryVersion: 1 }, ...previous]);
             addToast('Sale saved; stock and COGS recorded.', 'success');
-            try { await refreshInventoryData(); } catch { addToast('Sale saved. Reload to refresh stock.', 'info'); }
+            try { await refreshInventoryData(); await syncComplementarySale(id); } catch { addToast('Sale saved. Reload to refresh stock and complementary work.', 'info'); }
         } catch (error) { addToast(error instanceof Error ? error.message : 'Sale failed.', 'error'); throw error; }
         finally { saleSaveLock.current = false; setOperationLoading(false); }
-    }, [currentUser, refreshInventoryData, addToast]);
+    }, [currentUser, refreshInventoryData, syncComplementarySale, addToast]);
 
     const handleAddQuotation = useCallback(async (quoteData: Omit<Quotation, 'id'>) => {
-        await createDocument('quotations', quoteData, setQuotations, 'Quotation created successfully.');
+        await createDocument('quotations', {...quoteData,items:quotationItems(quoteData.items)}, setQuotations, 'Quotation created successfully.');
     }, [createDocument]);
 
     const handleDeleteQuotation = useCallback(async (id: string) => {
@@ -258,7 +267,7 @@ const App: React.FC = () => {
 
     const handleUpdateQuotation = useCallback(async (quotation: Quotation) => {
         const { id, ...data } = quotation;
-        await updateDocument('quotations', id, data, setQuotations, 'Quotation updated successfully.');
+        await updateDocument('quotations', id, {...data,items:quotationItems(data.items)}, setQuotations, 'Quotation updated successfully.');
     }, [updateDocument]);
 
     const handleUpdateSale = useCallback(async (sale: Sale) => {
@@ -267,9 +276,9 @@ const App: React.FC = () => {
         try {
             const items = await createStockService(db, currentUser).saveSale(id, data);
             setSales(previous => previous.map(s => s.id === id ? { ...sale, items } : s));
-            try { await refreshInventoryData(); } catch { addToast('Updated. Reload to refresh stock.', 'info'); }
+            try { await refreshInventoryData(); await syncComplementarySale(id); } catch { addToast('Updated. Reload to refresh stock and complementary work.', 'info'); }
         } catch (error) { addToast(error instanceof Error ? error.message : 'Update failed.', 'error'); throw error; }
-    }, [currentUser, refreshInventoryData, addToast]);
+    }, [currentUser, refreshInventoryData, syncComplementarySale, addToast]);
 
     const handleDeleteSale = useCallback(async (sale: Sale) => {
         if (!currentUser) throw new Error('Sign in before voiding a sale.');
@@ -277,9 +286,9 @@ const App: React.FC = () => {
             await createStockService(db, currentUser).reverseSale(sale.id);
             setSales(previous => previous.filter(s => s.id !== sale.id));
             addToast('Sale voided; unopened stock restored through reversing entries.', 'success');
-            try { await refreshInventoryData(); } catch { addToast('Voided. Reload to refresh stock.', 'info'); }
+            try { await refreshInventoryData(); await syncComplementarySale(sale.id); } catch { addToast('Voided. Reload to refresh stock and complementary work.', 'info'); }
         } catch (error) { addToast(error instanceof Error ? error.message : 'Unable to void sale.', 'error'); throw error; }
-    }, [currentUser, refreshInventoryData, addToast]);
+    }, [currentUser, refreshInventoryData, syncComplementarySale, addToast]);
 
     const handleStockOut = useCallback(async () => {
         addToast('Use Start in Inventory for materials; services no longer deduct meters.', 'info');
@@ -337,7 +346,6 @@ const App: React.FC = () => {
                     <Header pageTitle={activeView} currentUser={currentUser} onLogout={handleLogout} onMenuClick={() => setIsSidebarOpen(true)} />
                     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F4F7F9] p-4 sm:p-6 lg:p-8">
                         {operationLoading && <div className="fixed inset-0 bg-black bg-opacity-20 z-50 flex items-center justify-center"><div className="bg-white p-4 rounded-lg shadow-lg flex items-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>Processing...</div></div>}
-                        {activeView === 'Dashboard' && <DashboardView sales={sales} expenses={expenses} stockItems={stockItems} stockTransactions={stockTransactions} currentUser={currentUser} onStockOut={handleStockOut} onUpdateSale={handleUpdateSale} />}
                         {activeView === 'Sales' && (
                             <SalesView
                                 sales={sales} inventory={inventory} customers={customers} currentUser={currentUser} users={users} quoteForSale={quoteForSale} quoteNarration={quoteNarration} quoteDiscount={quoteDiscount} quoteRules={quoteRules} quoteTax={quoteTax} isQuotationMode={isQuotationMode} clearQuote={() => { setQuoteForSale([]); setQuoteNarration(''); setQuoteDiscount(0); setQuoteRules([]); setQuoteTax(0); setIsQuotationMode(false); }}
@@ -384,7 +392,7 @@ const App: React.FC = () => {
                         )}
                         {activeView === 'Customers' && (
                             <CustomersView
-                                customers={customers} sales={sales}
+                                customers={customers} sales={sales.filter(s=>!s.internalComplementary)}
                                 onImportCustomers={async (rows) => {
                                     if (!rows.length || rows.length > 400) throw new Error('Import between 1 and 400 customers.');
                                     for (const row of rows) {
@@ -409,7 +417,7 @@ const App: React.FC = () => {
                                 settings={settings}
                             />
                         )}
-                        {activeView === 'Reports' && (
+                        {activeView === 'Dashboard' && (currentUser.role === 'admin' || currentUser.isBanker) && (
                             <ReportsView
                                 stockTransactions={stockTransactions}
                                 sales={sales}

@@ -35,7 +35,8 @@ const formatUGX = (amount: number) => {
 
 
 
-const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, stockTransactions = [], inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, settings, customers = [] }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, stockTransactions = [], inventory, stockItems, materialCategories, currentUser, bankingRecords = [], onAddBankingRecord, settings, customers = [] }) => {
+    const sales = useMemo(()=>allSales.filter(s=>!s.internalComplementary),[allSales]);
     const isBankerOnly = currentUser.role === 'user' && currentUser.isBanker;
     const [period, setPeriod] = useState<ReportPeriod>('today');
     const [showBankingModal, setShowBankingModal] = useState(false);
@@ -315,7 +316,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, stockTransac
             {/* 1. Merged header bar */}
             <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">
-                    Business Reports: <span className="text-yellow-500">{getPeriodLabel()}</span>
+                    Dashboard: <span className="text-yellow-500">{getPeriodLabel()}</span>
                 </span>
                 <InfoTooltip label="Report calculations and information"><p>The financial cards follow the selected dates and department. Cash collected follows payment dates. Outstanding debts are the current unpaid balances of invoices issued in the selected dates and department; overpayments on other invoices do not reduce these debts. The cash safe banner shows today's cash across the entire business.</p>{currentUser.role === 'admin' && <><p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock adjustments. COGS includes started materials and resale costs. Purchases and opening balances are excluded. Stock losses reduce profit; gains add.</p><p>Inventory closing date: {valuation.closingDay}.</p>{financials.missingCogs > 0 && <p>{financials.missingCogs} historical sale lines lack COGS; profit is provisional.</p>}{valuation.missingItems > 0 && <p>{valuation.missingItems} stock records lack usable cost/opening history and are excluded from valuation.</p>}</>}</InfoTooltip><div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
 

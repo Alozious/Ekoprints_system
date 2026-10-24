@@ -26,7 +26,7 @@ export function statementHtml(input: StatementInput) {
     const kind = type === 'Invoice' ? 'Invoices' : type === 'Cash collected' ? 'Payments' : type === 'Operating expense' ? 'Expenses' : type === 'Bank deposit' ? 'Bank deposits' : type.includes('COGS') ? 'COGS' : 'Stock movements';
     if (inPeriod(date, filter) && (!options || options.particulars.includes(kind))) rows.push({ date, type, detail, ref, amount });
   };
-  for (const sale of sales.filter(s => !s.voidedAt && moduleShare(s, module) > 0)) {
+  for (const sale of sales.filter(s => !s.voidedAt && !s.internalComplementary && moduleShare(s, module) > 0)) {
     const share = moduleShare(sale, module);
     const name = customers.find(c => c.id === sale.customerId)?.name || 'Guest / Walk-in';
     const detail = `${name}: ${sale.items.filter(i => module === 'all' || saleDepartment(i) === module).map(i => `${i.name} × ${i.quantity}`).join(', ')}`;
@@ -35,7 +35,7 @@ export function statementHtml(input: StatementInput) {
       if (payment.amount !== 0) add(payment.date, 'Cash collected', name, sale.id, payment.amount * share);
     }
     const resaleCost = sale.items.filter(i => module === 'all' || saleDepartment(i) === module).reduce((sum, i) => sum + (i.cogsAtSale || 0), 0);
-    if (admin && resaleCost) add(sale.date, 'Resale COGS', detail, sale.id, resaleCost);
+    if (admin && resaleCost) add(sale.date, sale.items.some(item=>item.directCosts) ? 'Order COGS' : 'Resale COGS', detail, sale.id, resaleCost);
   }
   for (const expense of expenses.filter(e => module === 'all' || department(e.module) === module)) add(expense.date, 'Operating expense', `${expense.category}: ${expense.description}`, 'EXP', expense.amount);
   if (admin) for (const movement of stockTransactions) {
@@ -56,7 +56,7 @@ export function statementHtml(input: StatementInput) {
   const cards = (scope: AccountingFilter, format: 'cards' | 'header' | 'row' = 'cards') => {
     const totals = profitSummary(sales, expenses, stockTransactions, scope, module);
     const valuation = inventoryValuation(stockItems, inventory, stockTransactions, scope, module);
-    const debts = sales.filter(s => !s.voidedAt && inPeriod(s.date, scope)).reduce((sum, s) => sum + Math.max(0, s.total - (s.amountPaid || 0)) * moduleShare(s, module), 0);
+    const debts = sales.filter(s => !s.voidedAt && !s.internalComplementary && inPeriod(s.date, scope)).reduce((sum, s) => sum + Math.max(0, s.total - (s.amountPaid || 0)) * moduleShare(s, module), 0);
     const values: [string, string][] = [['Total invoiced', money(totals.revenue)], ['Cash collected', money(totals.cashCollected)], ['Outstanding debts', money(debts)]];
     if (admin) values.push(['Cost of goods (COGS)', money(totals.cogs)], ['Gross profit', money(totals.grossProfit)]);
     values.push(['Operating expenses', money(totals.operatingExpenses)]);
@@ -66,7 +66,7 @@ export function statementHtml(input: StatementInput) {
     const today = businessDay(filter.now || new Date());
     const first = scope.period === 'custom' ? scope.start! : scope.period === 'today' ? today : scope.period === 'month' ? today.slice(0,7)+'-01' : scope.period === 'year' ? today.slice(0,4)+'-01-01' : '0000-01-01';
     const last = scope.period === 'custom' ? (scope.dateMode === 'range' ? scope.end! : scope.start!) : today;
-    const cashAt = (end: string) => sales.filter(s=>!s.voidedAt).reduce((sum,s)=>sum+(s.payments?.length?s.payments:[{date:s.date,amount:s.amountPaid||0}]).filter(p=>businessDay(p.date)<=end).reduce((n,p)=>n+p.amount,0),0)
+    const cashAt = (end: string) => sales.filter(s=>!s.voidedAt && !s.internalComplementary).reduce((sum,s)=>sum+(s.payments?.length?s.payments:[{date:s.date,amount:s.amountPaid||0}]).filter(p=>businessDay(p.date)<=end).reduce((n,p)=>n+p.amount,0),0)
       - expenses.filter(e=>businessDay(e.date)<=end).reduce((n,e)=>n+e.amount,0) - bankingRecords.filter(b=>businessDay(b.date)<=end).reduce((n,b)=>n+b.amount,0);
     const previous = first === '0000-01-01' ? '' : businessDay(new Date(new Date(first+'T12:00:00+03:00').getTime()-86400000));
     const cashValues: [string,number][] = [['Cash from yesterday',previous?cashAt(previous):0],['Money banked',bankingRecords.filter(b=>inPeriod(b.date,scope)).reduce((n,b)=>n+b.amount,0)],['Money in safe',cashAt(last)]];
@@ -80,7 +80,7 @@ export function statementHtml(input: StatementInput) {
   const groupKey = (date: string) => businessDay(date).slice(0, grouping === 'yearly' ? 4 : grouping === 'monthly' ? 7 : 10);
   if(options){
     const today=businessDay(filter.now||new Date());
-    const activityDates=[...sales.filter(s=>!s.voidedAt).flatMap(s=>[s.date,...(s.payments||[]).map(p=>p.date)]),...expenses.map(e=>e.date),...bankingRecords.map(b=>b.date),...stockTransactions.filter(t=>'type' in t&&t.type!=='Opening').map(t=>t.date)].filter(d=>Number.isFinite(new Date(d).getTime())).map(businessDay).sort();
+    const activityDates=[...sales.filter(s=>!s.voidedAt && !s.internalComplementary).flatMap(s=>[s.date,...(s.payments||[]).map(p=>p.date)]),...expenses.map(e=>e.date),...bankingRecords.map(b=>b.date),...stockTransactions.filter(t=>'type' in t&&t.type!=='Opening').map(t=>t.date)].filter(d=>Number.isFinite(new Date(d).getTime())).map(businessDay).sort();
     const start=filter.period==='custom'?filter.start!:filter.period==='today'?today:filter.period==='month'?today.slice(0,7)+'-01':filter.period==='year'?today.slice(0,4)+'-01-01':activityDates[0]||today;
     const end=filter.period==='custom'?(filter.dateMode==='range'?filter.end!:filter.start!):today;
     const keys:string[]=[];
@@ -108,6 +108,7 @@ export function statementHtml(input: StatementInput) {
   @page { size: A4 landscape; margin: 12mm; } body{font:12px Arial,sans-serif;color:#1a2232;margin:24px}h1{font-size:22px;margin:8px 0}.header{text-align:center;white-space:pre-wrap}.meta{display:flex;justify-content:space-between;padding:14px 0}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.card{border:1px solid #ddd;border-radius:6px;padding:10px;break-inside:avoid}.card strong{display:block;font-size:10px;text-transform:uppercase;color:#666}.card span{display:block;font-size:14px;font-weight:bold;margin-top:6px}table{width:100%;border-collapse:collapse;font-size:10px}thead{display:table-header-group}th,td{text-align:left;padding:8px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}tr{break-inside:avoid}.amount{text-align:right;white-space:nowrap}.day-heading{background:#1a2232;color:white}.day-summary{background:#f5f7fa}.day-summary h3{margin:4px 0}.separator td{height:16px;border-top:3px solid #e5b900;border-bottom:0}.warning{font-size:10px;color:#805600;margin:8px 0}.footer{white-space:pre-wrap;text-align:center;margin-top:24px}@media print{body{margin:0}.card,.day-heading,.day-summary{print-color-adjust:exact}}
   </style></head><body><div class="header"><h1>${escape(input.header || input.businessName)}</h1>Statement of Accounts</div><div class="meta"><div>Period: <strong>${escape(input.periodLabel)}</strong><br>Department: <strong>${escape(module === 'all' ? 'All departments' : module)}</strong></div><div>Prepared by: ${escape(input.userName)}<br>Generated: ${escape(new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kampala' }))} (Uganda)</div></div>${cards(filter)}<table><thead><tr><th>Time (Uganda)</th><th>Transaction</th><th>Details</th><th>Reference</th><th class="amount">Amount</th></tr></thead>${daily || '<tbody><tr><td colspan="5">No transactions for these filters.</td></tr></tbody>'}</table><div class="footer">${escape(input.footer)}</div></body></html>`;
 }
+
 
 
 

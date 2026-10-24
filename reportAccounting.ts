@@ -30,10 +30,10 @@ export function allocatedSale(sale: Sale, module: DepartmentFilter): Sale {
     payments: (sale.payments || []).map(p => ({ ...p, amount: p.amount * share })) };
 }
 export function profitSummary(sales: Sale[], expenses: Expense[], movements: StockTransaction[], filter: AccountingFilter, module: DepartmentFilter = 'all') {
-  const includedSales = sales.filter(s => !s.voidedAt && inPeriod(s.date, filter));
+  const includedSales = sales.filter(s => !s.voidedAt && !s.internalComplementary && inPeriod(s.date, filter));
   const includedMovements = movements.filter(t => 'type' in t && inPeriod(t.date, filter) && (module === 'all' || t.module === module));
   const revenue = includedSales.reduce((sum, s) => sum + s.total * moduleShare(s, module), 0);
-  const cashCollected = sales.filter(s => !s.voidedAt).reduce((sum, sale) => {
+  const cashCollected = sales.filter(s => !s.voidedAt && !s.internalComplementary).reduce((sum, sale) => {
     const payments = sale.payments?.length ? sale.payments : [{ date: sale.date, amount: sale.amountPaid || 0 }];
     return sum + payments.filter(payment => inPeriod(payment.date, filter)).reduce((paid, payment) => paid + payment.amount * moduleShare(sale, module), 0);
   }, 0);
@@ -78,3 +78,4 @@ export function inventoryValuation(stock: StockItem[], products: InventoryItem[]
   }
   return { rows, value: rows.reduce((sum, row) => sum + row.value, 0), missingItems, closingDay, historical };
 }
+

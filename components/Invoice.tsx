@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { invoiceItems } from '../kuyiriba';
 import { Sale, Customer, SystemSettings } from '../types';
 import { PrintIcon } from './icons';
 import Modal from './Modal';
@@ -278,7 +279,7 @@ function buildPrintHtml(params: {
   const { bgUrl, logoUrl, qrUrl, isQuotation, sale, settings, subtotal, discount, discountPercent, taxPercent, taxAmount, grandTotal, paid, balance } = params;
 
   const badgeClass = isQuotation ? 'quote' : (sale.status === 'Paid' ? 'paid' : sale.status === 'Partially Paid' ? 'partial' : 'unpaid');
-  const badgeText = isQuotation ? 'Quotation' : sale.status;
+  const badgeText = sale.internalComplementary ? 'Internal complementary work' : isQuotation ? 'Quotation' : sale.status;
   const refPrefix = isQuotation ? 'QT' : 'INV';
 
   const rulesHtml = (sale.rules && sale.rules.length > 0)
@@ -286,7 +287,7 @@ function buildPrintHtml(params: {
        <ul>${sale.rules.map(r => `<li>${r}</li>`).join('')}</ul>`
     : '';
 
-  const paidRowHtml = !isQuotation ? `
+  const paidRowHtml = !isQuotation && !sale.internalComplementary ? `
     <div class="inv-total-row">
       <span class="inv-total-lbl">Paid</span>
       <span class="inv-total-val paid-c">${fmt(paid)}</span>
@@ -381,7 +382,7 @@ function buildPrintHtml(params: {
         </tr>
       </thead>
       <tbody>
-        ${sale.items.map(item => `
+        ${invoiceItems(sale).map(item => `
           <tr>
             <td class="desc">${item.name}</td>
             <td class="r">${item.quantity}</td>
@@ -464,25 +465,25 @@ window.onload=function(){
 /* ─── Component ──────────────────────────────────────────────── */
 const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings, isQuotation = false }) => {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
-  const subtotal = sale.subtotal || sale.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const subtotal = sale.subtotal || invoiceItems(sale).reduce((sum, i) => sum + i.price * i.quantity, 0);
   const discount = sale.discount || 0;
   const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
   const taxPercent = sale.taxPercent || 0;
   const taxAmount = subtotal > 0 ? ((subtotal - discount) * taxPercent / 100) : 0;
   const grandTotal = sale.total;
   const paid = sale.amountPaid || 0;
-  const balance = grandTotal - paid;
+  const balance = sale.internalComplementary ? 0 : grandTotal - paid;
 
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=EKO-${isQuotation ? 'QT' : 'INV'}-${sale.id.substring(0, 8)}&color=0-0-0&bgcolor=255-255-255&margin=2`;
   const refPrefix = isQuotation ? 'QT' : 'INV';
-  const badgeLabel = isQuotation ? 'Quotation' : sale.status;
+  const badgeLabel = sale.internalComplementary ? 'Internal complementary work' : isQuotation ? 'Quotation' : sale.status;
   const badgeClass = isQuotation ? 'inv-badge quote' : (sale.status === 'Paid' ? 'inv-badge paid' : sale.status === 'Partially Paid' ? 'inv-badge partial' : 'inv-badge unpaid');
 
   // Paginate items for preview
   const itemsPerPageFirst = 6;
   const itemsPerPageSubsequent = 8;
   const pages = [];
-  const itemsCopy = [...sale.items];
+  const itemsCopy = [...invoiceItems(sale)];
   pages.push(itemsCopy.splice(0, itemsPerPageFirst));
   while (itemsCopy.length > 0) {
     pages.push(itemsCopy.splice(0, itemsPerPageSubsequent));
@@ -538,7 +539,7 @@ const Invoice: React.FC<InvoiceProps> = ({ isOpen, onClose, sale, settings, isQu
 <table>
   <thead><tr><th>ITEM</th><th style="text-align:right;width:30px;">QTY</th><th style="text-align:right;width:70px;">TOTAL</th></tr></thead>
   <tbody>
-    ${sale.items.map(item => `<tr>
+    ${invoiceItems(sale).map(item => `<tr>
       <td>${item.name}</td>
       <td style="text-align:right;">${item.quantity}</td>
       <td style="text-align:right;">${(item.price * item.quantity).toLocaleString()}</td>
@@ -654,7 +655,7 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
                 </tr>
               </thead>
               <tbody>
-                {sale.items.map((item, i) => (
+                {invoiceItems(sale).map((item, i) => (
                   <tr key={i}>
                     <td className="desc">{item.name}</td>
                     <td className="r">{item.quantity}</td>
@@ -694,7 +695,7 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
                   <span className="inv-total-lbl">Tax{taxPercent > 0 ? ` (${taxPercent}%)` : ''}</span>
                   <span className="inv-total-val tax">{taxPercent > 0 ? fmt(taxAmount) : 'N/A'}</span>
                 </div>
-                {!isQuotation && (
+                {!isQuotation && !sale.internalComplementary && (
                   <>
                     <div className="inv-total-row">
                       <span className="inv-total-lbl">Paid</span>
@@ -752,3 +753,5 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
 };
 
 export default Invoice;
+
+

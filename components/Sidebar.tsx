@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, ReportsIcon, UsersIcon, CalculatorIcon, CogIcon } from './icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, UsersIcon, CalculatorIcon, CogIcon } from './icons';
 import { User } from '../types';
 import Logo from './Logo';
 
@@ -39,7 +39,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
         { name: 'Expenses', icon: ExpensesIcon },
         { name: 'Customers', icon: CustomersIcon },
         { name: 'Marketing', icon: CustomersIcon },
-        { name: 'Reports', icon: ReportsIcon },
         { name: 'Users', icon: UsersIcon },
         { name: 'Settings', icon: CogIcon },
     ];
@@ -52,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUse
     ];
 
     if (currentUser.isBanker) {
-        userNavItems.push({ name: 'Reports', icon: ReportsIcon });
+        userNavItems.unshift({ name: 'Dashboard', icon: DashboardIcon });
     }
 
     const navItems = currentUser.role === 'admin' ? adminNavItems : userNavItems;

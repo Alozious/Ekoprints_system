@@ -84,3 +84,14 @@ test('daily table includes empty days and particulars follow their own period su
   assert.ok(first<details&&details<second);
   assert.ok(html.includes('<td class="amount">0 UGX</td>'));
 });
+
+test('Kuyiriba direct costs are included once in statement COGS',()=>{
+ const custom={...sale,items:[{itemId:'shirt',name:'Custom shirt',quantity:2,price:15000,module:'dtf',directCosts:{buyingPrice:7000,otherCost:1000,otherDescription:'Transport'},cogsAtSale:16000}],total:30000};
+ const html=statementHtml({...input,sales:[custom]});
+ assert.ok(html.includes('Order COGS'));assert.ok(html.includes('16,000 UGX'));assert.ok(!html.includes('Resale COGS'));
+});
+
+test('linked internal complementary entries are excluded from external statement transactions',()=>{
+const html=statementHtml({...input,sales:[sale,{...sale,id:'internal-complementary',internalComplementary:true,total:5000}]});
+assert.ok(html.includes('invoice-1'));assert.ok(!html.includes('internal-complementary'));
+});

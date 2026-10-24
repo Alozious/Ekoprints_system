@@ -964,7 +964,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {paginatedSales.map(sale => {
-                                const balance = sale.total - (sale.amountPaid || 0);
+                                const balance = sale.internalComplementary ? 0 : sale.total - (sale.amountPaid || 0);
                                 const customer = customers.find(c => c.id === sale.customerId);
                                 return (
                                     <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -992,7 +992,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                             ) : (
                                                 <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold text-[9px] uppercase">
                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                    Settled
+                                                    {sale.internalComplementary ? 'Internal · no cash' : 'Settled'}
                                                 </span>
                                             )}
                                         </td>
@@ -1002,7 +1002,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                 sale.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
                                                 'bg-rose-100 text-rose-700'
                                             }`}>
-                                                {sale.status === 'Partially Paid' ? 'Partial' : sale.status}
+                                                {sale.internalComplementary ? 'Internal' : sale.status === 'Partially Paid' ? 'Partial' : sale.status}
                                             </span>
                                         </td>
                                         <td className="px-4 py-2">
@@ -1011,7 +1011,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
                                                     <DocumentTextIcon className="w-3.5 h-3.5" />
                                                 </button>
-                                                {currentUser.role === 'admin' ? (
+                                                {!sale.internalComplementary && <>{currentUser.role === 'admin' ? (
                                                     <button onClick={() => handleOpenEditDocument(sale, 'sale')} title="Edit Invoice"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                         <EditIcon className="w-3.5 h-3.5" />
@@ -1040,6 +1040,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                         <TrashIcon className="w-3.5 h-3.5" />
                                                     </button>
                                                 )}
+                                                </>}
                                             </div>
                                         </td>
                                     </tr>

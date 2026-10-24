@@ -2,6 +2,7 @@ import { collection, doc, runTransaction } from 'firebase/firestore';
 import type { DocumentData, Firestore, Transaction } from 'firebase/firestore';
 import type { AssignedDepartment, CostedSaleItem, Department, Sale, SaleItem, UnitStockTransaction } from './types.ts';
 import { department, nonNegative, positive, receiveBalance, restoreBalance, sellBalance, startBalance, wholeUnits } from './stockMath.ts';
+import { directOrderCogs } from './kuyiriba.ts';
 
 export interface StockActor { id: string; username: string; role: 'admin' | 'user' }
 interface ReceiveInput { units: number; unitCost: number; supplier: string; paymentStatus: 'Paid' | 'Credit'; freightTotal?: number; reference?: string }
@@ -100,6 +101,12 @@ export function createStockService(db: Firestore, actor: StockActor) {
       const user = await authorize(tx, options.adminOverride === true);
       const oldSnap = await tx.get(saleRef);
       const old = oldSnap.exists() ? oldSnap.data() as Sale : undefined;
+      if(old?.internalComplementary||input?.internalComplementary)throw new Error('Edit the parent customer order to change complementary work.');
+      const hasComplement=[...(old?.items||[]),...(input?.items||[])].some(i=>i.complementaryFor);
+      const linkedRef=doc(db,'sales',saleId+'--complementary');
+      const linked=hasComplement ? await tx.get(linkedRef) : undefined;
+      const internalCustomerRef=doc(db,'customers','eko-prints-complementary');
+      const internalCustomer=hasComplement ? await tx.get(internalCustomerRef) : undefined;
       if (old?.voidedAt) throw new Error('Sale has already been reversed.');
       if (old && input && JSON.stringify(input.items) === JSON.stringify(old.items)) {
         // Payments/notes do not reverse stock or revalue original COGS.
@@ -143,10 +150,13 @@ export function createStockService(db: Firestore, actor: StockActor) {
         entries.push(movement(entryRef.id, state.id, state.entity, 'Reversal', item.quantity, cost, department(item.module), user, { reference: saleId, reverses: originalMovementId, notes: input ? 'Sale edited: reverse previous issue' : 'Sale voided: reverse previous issue' }));
       }
       const movementIds: string[] = [];
-      const items: CostedSaleItem[] = (input?.items || []).map((item, index) => {
+      const items: CostedSaleItem[] = (input?.items || []).map((originalItem, index) => {
+        let item=originalItem;
+        if(item.complementaryFor){const parent=input?.items.find(p=>p.itemId===item.complementaryFor&&p.directCosts);if(!parent)throw new Error('Complementary work requires its parent Kuyiriba item.');positive(item.complementaryQuantityPerItem??NaN,'Complementary quantity');nonNegative(item.complementaryUnitPrice??NaN,'Complementary price');item={...item,quantity:parent.quantity*item.complementaryQuantityPerItem!,price:0};}
         positive(item.quantity, 'Quantity'); nonNegative(item.price, 'Selling price');
         const key = keyFor(item);
-        if (!key) { movementIds[index] = ''; return { ...item, module: department(item.module || item.metadata?.tab), cogsAtSale: 0 }; }
+        if (!key) { movementIds[index] = ''; return { ...item, module: department(item.module || item.metadata?.tab), cogsAtSale: directOrderCogs(item) }; }
+        if (item.directCosts) throw new Error('An externally bought Kuyiriba item cannot also issue inventory stock.');
         const state = balances.get(key)!;
         if (state.data.isActive === false) throw new Error('This stock item is inactive.');
         if (state.entity === 'material' && item.metadata?.type === 'dimension') throw new Error('Unopened resale must stay separate from printing services.');
@@ -162,6 +172,12 @@ export function createStockService(db: Firestore, actor: StockActor) {
       for (const entry of entries) tx.set(doc(db, 'stockTransactions', entry.transactionId), entry);
       if (input) tx.set(saleRef, { ...input, items, inventoryVersion: 1, inventoryMovementIds: movementIds });
       else tx.update(saleRef, { voidedAt: new Date().toISOString() });
+      const complementaryItems=items.filter(i=>i.complementaryFor).map(i=>({...i,price:i.complementaryUnitPrice!,cogsAtSale:0}));
+      if(input&&complementaryItems.length){
+        if(!internalCustomer?.exists())tx.set(internalCustomerRef,{name:'EKO PRINTS COMPLEMENTARY',email:'',phone:'',address:'',createdAt:new Date().toISOString()});
+        const total=complementaryItems.reduce((sum,i)=>sum+i.price*i.quantity,0);
+        tx.set(linkedRef,{date:input.date,items:complementaryItems,customerId:'eko-prints-complementary',subtotal:total,total,amountPaid:0,payments:[],status:'Paid',userId:user.userId,userName:user.userName,internalComplementary:true,parentSaleId:saleId,inventoryVersion:1,inventoryMovementIds:[],notes:'Internal complementary work; included in the finished customer price. No additional cash received. Stock and COGS are recorded on parent order '+saleId});
+      }else if(linked?.exists())tx.update(linkedRef,{voidedAt:new Date().toISOString()});
       return items;
     });
   }

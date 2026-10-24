@@ -1,3 +1,5 @@
+import {calculatorTiers,dimensionPrice} from '../calculatorPricing';
+import KuyiribaCalculator from './KuyiribaCalculator';
 import { materialResaleCatalog } from '../materialResale';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -13,6 +15,8 @@ interface CalculatorViewProps {
     productCategories: ProductCategory[];
     onCreateSale: (items: SaleItem[], narration: string, discount: number, rules?: string[], isQuotation?: boolean) => void;
     settings: SystemSettings;
+    embeddedDepartment?: string;
+    onAppendItem?: (item: SaleItem) => void;
 }
 
 type Unit = 'm' | 'ft' | 'in' | 'cm';
@@ -43,13 +47,13 @@ const PAPER_SIZE_STYLES: Record<string, string> = {
 };
 
 const CALCULATOR_TABS = [
-    { id: 'large-format', label: 'LARGE FORMAT', type: 'dimension' }, 
-    { id: 'dtf', label: 'DTF', type: 'dimension' }, 
-    { id: 'embroidery', label: 'EMBROIDERY', type: 'simple' },
-    { id: 'bizhub', label: 'BIZHUB', type: 'simple' },
-    { id: 'material-sales', label: 'MATERIAL SALES', type: 'simple' },
-    { id: 'products', label: 'OTHER PRODUCTS', type: 'simple' },
-    { id: 'others', label: 'OTHERS', type: 'manual' },
+    {id:'large-format',label:'Large Format',type:'dimension'},
+    {id:'dtf',label:'DTF',type:'dimension'},
+    {id:'embroidery',label:'Embroidery',type:'simple'},
+    {id:'bizhub',label:'Digital / Bizhub',type:'simple'},
+    {id:'products',label:'Material/Other Products',type:'simple'},
+    {id:'kuyiriba',label:'Kuyiriba',type:'kuyiriba'},
+    {id:'others',label:'Other services',type:'manual'},
 ];
 
 const formatUGX = (amount: number) => {
@@ -99,8 +103,12 @@ const UnitConverterDisplay: React.FC<{ lengthM: number; widthM: number }> = ({ l
     );
 };
 
-const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTiers, inventory, materialCategories, productCategories, onCreateSale, settings }) => {
-    const [activeTab, setActiveTab] = useState(CALCULATOR_TABS[0].id);
+const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTiers, inventory, materialCategories, productCategories, onCreateSale, settings, embeddedDepartment, onAppendItem }) => {
+    const [activeTab, setActiveTab] = useState(embeddedDepartment || CALCULATOR_TABS[0].id);
+    const [kuyiribaRecall,setKuyiribaRecall]=useState<SaleItem|null>(null);
+    const [kuyiribaRecallComplement,setKuyiribaRecallComplement]=useState<SaleItem|null>(null);
+    const [productDepartment,setProductDepartment]=useState('');
+    useEffect(()=>{if(embeddedDepartment)setActiveTab(embeddedDepartment);},[embeddedDepartment]);
     const [quoteItems, setQuoteItems] = useState<SaleItem[]>([]);
     const [globalNarration, setGlobalNarration] = useState('');
     const [selectedRules, setSelectedRules] = useState<string[]>([]);
@@ -179,8 +187,8 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         if (!selectedStockItem) return [];
         const categoryId = stockItems.find(i => i.skuId === selectedStockItem)?.categoryId;
         if (!categoryId) return [];
-        return pricingTiers.filter(tier => tier.categoryId === categoryId);
-    }, [selectedStockItem, stockItems, pricingTiers]);
+        return calculatorTiers(pricingTiers,categoryId,isDTF,dtfPreset);
+    }, [selectedStockItem, stockItems, pricingTiers, isDTF, dtfPreset]);
 
     const selectedMultiplier = useMemo(() => {
         if (!selectedTier) return 0;
@@ -188,12 +196,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     }, [selectedTier, tiersForSelectedItem]);
 
     const rawCalculatedDimPrice = useMemo(() => {
-        if (isDTF && dtfPreset) {
-            if (dtfPreset === 'A4') return 5000;
-            if (dtfPreset === 'A3') return 10000;
-        }
-        // Both Large Format and custom DTF sizes use selected tier multiplier
-        return Math.round(areaInSqCm * selectedMultiplier);
+        return dimensionPrice(areaInSqCm,selectedMultiplier,isDTF&&!!dtfPreset);
     }, [areaInSqCm, selectedMultiplier, isDTF, dtfPreset]);
 
     useEffect(() => {
@@ -219,12 +222,12 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     const materialProducts = useMemo(() => materialResaleCatalog(stockItems, materialCategories), [stockItems, materialCategories]);
     const filteredProductCategories = useMemo(() => {
-        if (activeTab === 'material-sales') return [...new Set(materialProducts.map(p => p.category))].map(name => ({ id: name, name, module: 'material-sales', isActive: true }));
+        if(activeTab==='products')return [...new Set([...materialProducts,...inventory.filter(i=>i.isActive!==false)].filter(i=>!productDepartment||i.module===productDepartment).map(i=>i.category))].map(name=>({id:name,name,module:'products',isActive:true}));
         return productCategories.filter(cat => cat.module === activeTab && cat.isActive !== false);
-    }, [productCategories, activeTab, materialProducts]);
+    }, [productCategories, activeTab, materialProducts, inventory, productDepartment]);
 
     const filteredInventory = useMemo(() => {
-        let items: InventoryItem[] = activeTab === 'material-sales' ? materialProducts : inventory.filter(item => item.module === activeTab && item.isActive !== false &&
+        let items: InventoryItem[] = activeTab === 'products' ? [...materialProducts,...inventory.filter(i=>i.isActive!==false&&productCategories.find(c=>c.module===i.module&&c.name===i.category)?.isActive!==false)].filter(i=>!productDepartment||i.module===productDepartment) : inventory.filter(item => item.module === activeTab && item.isActive !== false &&
             productCategories.find(c => c.module === activeTab && c.name === item.category)?.isActive !== false);
         
         if (itemSearchQuery.trim()) {
@@ -239,7 +242,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             items = items.filter(i => i.category === selectedProductCategory);
         }
         return items;
-    }, [inventory, selectedProductCategory, activeTab, itemSearchQuery, productCategories, materialProducts]);
+    }, [inventory, selectedProductCategory, activeTab, itemSearchQuery, productCategories, materialProducts, productDepartment]);
 
     const totalSimplePrice = useMemo(() => {
         return (negotiatedPrice * simpleQuantity) + extraAmount;
@@ -249,7 +252,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         if (!selectedStockItem) { addToast("Please select a material/roll.", "error"); return; }
         if (!availableStockItems.some(item => item.skuId === selectedStockItem)) { addToast('This material is no longer active. Select another material.', 'error'); return; }
         // Restored validation for tiers for both Large Format and custom DTF sizes
-        if (!dtfPreset && !selectedTier) { addToast("Please select a pricing tier.", "error"); return; }
+        if (!tiersForSelectedItem.some(t => t.id === selectedTier)) { addToast("Select a pricing tier saved in Inventory Setup.", "error"); return; }
         if (totalDimPrice <= 0) { addToast("Calculated price must be greater than zero.", "error"); return; }
         
         const stockItem = stockItems.find(i => i.skuId === selectedStockItem);
@@ -283,13 +286,14 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                 dtfPreset
             }
         };
+        if(onAppendItem){onAppendItem(newItem);return;}
         setQuoteItems(prev => [...prev, newItem]);
         addToast("Added to scratchpad.", "success");
     };
 
     const handleAddSimpleToQuote = () => {
         if (!selectedProduct) return;
-        const material = activeTab === 'material-sales' ? materialProducts.find(p => p.id === selectedProduct.id) : undefined;
+        const material = activeTab === 'products' ? materialProducts.find(p => p.id === selectedProduct.id) : undefined;
         if (!(material || inventory.some(item => item.id === selectedProduct.id && item.isActive !== false)) ||
             productCategories.find(c => c.module === activeTab && c.name === selectedProduct.category)?.isActive === false) {
             addToast('This product is no longer active. Select another product.', 'error'); return;
@@ -312,6 +316,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                 extraAmountLabel
             }
         };
+        if(onAppendItem){onAppendItem(newItem);return;}
         setQuoteItems(prev => [...prev, newItem]);
         addToast("Added to scratchpad.", "success");
     };
@@ -333,6 +338,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                 manualQuantity
             }
         };
+        if(onAppendItem){onAppendItem(newItem);return;}
         setQuoteItems(prev => [...prev, newItem]);
         setManualItemName('');
         setManualPrice(0);
@@ -342,6 +348,12 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
     const handleRecallQuoteItem = (index: number) => {
         const item = quoteItems[index];
+        if(item.complementaryFor){const parent=quoteItems.findIndex(i=>i.itemId===item.complementaryFor);if(parent>=0)handleRecallQuoteItem(parent);return;}
+        if(item.directCosts){
+            const part=quoteItems.find(i=>i.complementaryFor===item.itemId);
+            setKuyiribaRecall(item);setKuyiribaRecallComplement(part?{...part,price:part.complementaryUnitPrice||0,quantity:part.complementaryQuantityPerItem||part.quantity/item.quantity}:null);
+            setActiveTab('kuyiriba');setQuoteItems(prev=>prev.filter(i=>i.itemId!==item.itemId&&i.complementaryFor!==item.itemId));return;
+        }
         if (!item.metadata) {
             addToast("This item has no metadata and cannot be recalled.", "error");
             return;
@@ -399,7 +411,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
         handleClearQuote();
     };
 
-    const handleRemoveQuoteItem = (index: number) => setQuoteItems(prev => prev.filter((_, i) => i !== index));
+    const handleRemoveQuoteItem = (index: number) => {const item=quoteItems[index];setQuoteItems(prev=>prev.filter(i=>i.itemId!==item.itemId&&i.complementaryFor!==item.itemId));};
 
     const handlePresetClick = (name: string, size: {width: number; height: number}) => {
         if (isDTF) {
@@ -414,22 +426,24 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
     const labelClass = "block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5 ml-1";
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr,1fr] gap-6 items-start h-[calc(100vh-140px)] overflow-hidden">
+        <div className={embeddedDepartment ? 'min-w-0' : 'grid grid-cols-1 lg:grid-cols-[1.2fr,1fr] gap-6 items-start h-[calc(100vh-140px)] overflow-hidden'}>
             {/* Left Column: Input Form */}
-            <div className="bg-[#F4F7F9] rounded-[2.5rem] shadow-sm overflow-hidden h-full flex flex-col p-4 space-y-4">
-                <div className="flex overflow-x-auto no-scrollbar gap-2 shrink-0 px-1">
+            <div className={embeddedDepartment ? 'min-w-0' : 'bg-[#F4F7F9] rounded-[2.5rem] shadow-sm overflow-hidden h-full flex flex-col p-4 space-y-4'}>
+                {!embeddedDepartment&&<div className="grid grid-cols-3 sm:grid-cols-7 border-b border-gray-200 shrink-0 min-w-0" aria-label="Calculator departments">
                     {CALCULATOR_TABS.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`py-2 px-6 text-[10px] font-black whitespace-nowrap transition-all uppercase tracking-widest rounded-full border-2 ${activeTab === tab.id ? 'bg-yellow-400 border-yellow-400 text-gray-900 shadow-md scale-105' : 'bg-white border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
+                            aria-pressed={activeTab===tab.id}
+                            className={`min-w-0 px-1 py-3 text-[9px] font-bold leading-tight break-words border-b-2 transition-colors ${activeTab === tab.id ? 'bg-yellow-50 border-yellow-400 text-gray-900' : 'border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
                         >
                             {tab.label}
                         </button>
                     ))}
-                </div>
+                </div>}
 
-                <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex-1 overflow-y-auto no-scrollbar space-y-6">
+                <div className={embeddedDepartment?'bg-white p-2 space-y-4':'bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex-1 overflow-y-auto no-scrollbar space-y-6'}>
+                    {activeTab==='kuyiriba'&&!embeddedDepartment&&<KuyiribaCalculator stockItems={stockItems} pricingTiers={pricingTiers} inventory={inventory} materialCategories={materialCategories} productCategories={productCategories} settings={settings} initialItem={kuyiribaRecall} initialComplement={kuyiribaRecallComplement} onAppend={items=>{setQuoteItems(prev=>[...prev,...items]);setKuyiribaRecall(null);setKuyiribaRecallComplement(null);addToast('Kuyiriba item added to scratchpad.','success');}}/>}
                     {activeTabConfig.type === 'dimension' && (
                         <div className="fade-in space-y-6">
                             {/* Paper Presets */}
@@ -493,6 +507,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                 <p className="text-lg font-black text-gray-700">{(areaInSqCm).toLocaleString()} <span className="text-xs text-gray-400">cm²</span> | {(areaInSqCm / 10000).toFixed(4)} <span className="text-xs text-gray-400">m²</span></p>
                             </div>
 
+                            {isDTF&&selectedStockItem&&!tiersForSelectedItem.length&&<p className="text-sm text-amber-700" role="status">Add {dtfPreset||'custom-size'} pricing tiers in Inventory / DTF / Setup.</p>}
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className={labelClass}>Material</label>
@@ -578,14 +593,15 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className={labelClass}>{activeTab === 'material-sales' ? 'Department / material' : 'Module Filter'}</label>
+                                    {activeTab==='products'&&<label className={labelClass}>Department<select className={darkInputClass} value={productDepartment} onChange={e=>{setProductDepartment(e.target.value);setSelectedProductCategory('');setSelectedProduct(null);}}><option value="">All departments</option>{[{id:'large-format',name:'Large Format'},{id:'dtf',name:'DTF'},{id:'embroidery',name:'Embroidery'},{id:'bizhub',name:'Digital / Bizhub'},{id:'products',name:'Other Products'}].map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
+                                    <label className={labelClass}>{activeTab === 'products' ? 'Material / product' : 'Module Filter'}</label>
                                     <select value={selectedProductCategory} onChange={e => setSelectedProductCategory(e.target.value)} className={darkInputClass}>
                                         <option value="">All Categories</option>
                                         {filteredProductCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={labelClass}>Product Selection</label>
+                                    <label className={labelClass}>Variant</label>
                                     <select value={selectedProduct?.id || ''} onChange={e => {
                                         const p = filteredInventory.find(i => i.id === e.target.value);
                                         setSelectedProduct(p || null);
@@ -594,7 +610,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         <option value="">Choose Item...</option>
                                         {filteredInventory.map(item => (
                                             <option key={item.id} value={item.id}>
-                                                {item.name} ({formatUGX(item.price).replace(' UGX', '')}){activeTab === 'material-sales' ? ` · ${item.quantity} unopened` : ''}
+                                                {item.name} ({formatUGX(item.price).replace(' UGX', '')}){activeTab === 'products' ? ` · ${item.quantity} unopened` : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -602,7 +618,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                             </div>
 
                             {selectedProduct && (
-                                <div className="space-y-6 pt-4 border-t border-gray-50">{activeTab === 'material-sales' && <p className="text-sm font-bold">Unopened units available: {selectedProduct.quantity}</p>}
+                                <div className="space-y-6 pt-4 border-t border-gray-50">{activeTab === 'products' && <p className="text-sm font-bold">Unopened units available: {selectedProduct.quantity}</p>}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className={labelClass}>Negotiated Unit Price</label>
@@ -615,7 +631,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         </div>
                                         <div>
                                             <label className={labelClass}>Quantity</label>
-                                            <input type="number" min="1" max={activeTab === 'material-sales' ? selectedProduct.quantity : undefined} value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
+                                            <input type="number" min="1" max={activeTab === 'products' ? selectedProduct.quantity : undefined} value={simpleQuantity} onChange={e => setSimpleQuantity(parseInt(e.target.value) || 1)} className={darkInputClass} />
                                         </div>
                                     </div>
                                     
@@ -701,7 +717,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             </div>
 
             {/* Right Column: Order Scratchpad */}
-            <div className="bg-white rounded-[2.5rem] shadow-xl h-full border border-gray-100 flex flex-col p-6 overflow-hidden">
+            {!embeddedDepartment&&<div className="bg-white rounded-[2.5rem] shadow-xl h-full border border-gray-100 flex flex-col p-6 overflow-hidden">
                 <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-50 pb-6">
                     <div className="flex items-center gap-3">
                          <div className="bg-yellow-400 p-3 rounded-2xl text-[#1A2232] shadow-sm"><DocumentTextIcon className="w-5 h-5" /></div>
@@ -727,7 +743,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                     <div key={index} className="flex justify-between items-center p-5 bg-gray-50/50 rounded-3xl border border-gray-100 hover:border-yellow-400 hover:bg-white transition-all shadow-sm group">
                                         <div className="overflow-hidden flex-1 mr-6">
                                             <p className="font-black text-gray-900 text-xs uppercase tracking-tight truncate mb-1">{item.name}</p>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.quantity} x {formatUGX(item.price)}</p>
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.quantity} x {formatUGX(item.price)}</p>{item.complementaryFor&&<p className="text-xs text-blue-700">Internal complementary work: {formatUGX((item.complementaryUnitPrice||0)*item.quantity)} · included in final customer price</p>}
                                         </div>
                                         <div className="flex items-center shrink-0 gap-2">
                                             <p className="font-black text-gray-900 text-sm mr-2 tracking-tighter">{formatUGX(item.price * item.quantity)}</p>
@@ -875,7 +891,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                         </>
                     )}
                 </div>
-            </div>
+            </div>}
         </div>
     );
 };

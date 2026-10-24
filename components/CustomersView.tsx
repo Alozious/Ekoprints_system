@@ -1,3 +1,4 @@
+import { invoiceItems } from '../kuyiriba';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Customer, Sale, SystemSettings } from '../types';
@@ -330,7 +331,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 </tr>
               </thead>
               <tbody>
-                ${sale.items.map(item => `
+                ${invoiceItems(sale).map(item => `
                   <tr>
                     <td>${item.name}</td>
                     <td class="text-right">${item.quantity}</td>
@@ -832,3 +833,4 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
 };
 
 export default CustomersView;
+

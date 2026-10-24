@@ -7,6 +7,13 @@ const sale = { id: 's', date, total: 972000, amountPaid: 972000, subtotal: 10000
   { name: 'Unopened roll', quantity: 1, price: 250000, module: 'large-format', cogsAtSale: 120000, materialSkuId: 'roll' },
 ] };
 const movement = (type, units, unitCost, module = 'large-format') => ({ transactionId: type, skuId: 'roll', entity: 'material', type, units, unitCost, totalValue: Math.abs(units) * unitCost, module, date });
+
+test('linked complementary sales do not duplicate external revenue, cash or COGS',()=>{
+ const parent={...sale,total:40000,amountPaid:40000,payments:[],items:[{name:'Shirt',quantity:2,price:20000,module:'dtf',cogsAtSale:17000}]};
+ const internal={...parent,id:'internal',total:10000,amountPaid:0,internalComplementary:true,items:[{name:'DTF A4',quantity:2,price:5000,module:'dtf',cogsAtSale:10000}]};
+ const summary=profitSummary([parent,internal],[],[],{period:'all'});
+ assert.equal(summary.revenue,40000);assert.equal(summary.cashCollected,40000);assert.equal(summary.cogs,17000);assert.equal(summary.grossProfit,23000);
+});
 test('COGS includes Start and resale snapshot, never Opening, Purchase or duplicate Sale movements', () => {
   const result = profitSummary([sale], [], [movement('Opening', 3, 450000), movement('Purchase', 2, 500000), movement('Start', -1, 450000), movement('Sale', -1, 120000)], { period: 'all' });
   assert.equal(result.cogs, 570000); assert.equal(result.grossProfit, 402000);

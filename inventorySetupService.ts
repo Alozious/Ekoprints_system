@@ -129,14 +129,15 @@ export function createInventorySetupService(db: Firestore, actor: StockActor) {
       tx.set(ref, { ...data, name: data.name.trim(), ...(id ? {} : { isActive: true }) }, { merge: true });
     });
   }
-  async function saveTier(id: string | null, categoryId: string, name: string, value: number) {
+  async function saveTier(id: string | null, categoryId: string, name: string, value: number, preset: 'A4' | 'A3' | null = null) {
     if (!name.trim()) throw new Error('Tier name required.'); nonNegative(value, 'Tier price');
     const ref = id ? doc(db, 'pricingTiers', id) : doc(collection(db, 'pricingTiers'));
     await runTransaction(db, async tx => {
       await admin(tx);
       const category = await tx.get(doc(db, 'materialCategories', categoryId));
       if (!category.exists()) throw new Error('Choose a material.');
-      tx.set(ref, { categoryId, name: name.trim(), value });
+      if(preset && (category.data()?.module !== 'dtf' || !['A4','A3'].includes(preset)))throw new Error('Sheet presets require a DTF material.');
+      tx.set(ref, { categoryId, name: name.trim(), value, preset });
     });
   }
   async function setMaterialResalePrice(id: string, sellingPrice: number) {

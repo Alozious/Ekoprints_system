@@ -1,3 +1,4 @@
+import ActionButton, {ActionForm} from './ActionButton';
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
@@ -50,7 +51,7 @@ const EditUserModal: React.FC<{
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Edit User: ${user.username}`}>
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <ActionForm onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-4">
           <div>
             <label className={labelStyle}>Username</label>
@@ -120,9 +121,9 @@ const EditUserModal: React.FC<{
           )}
         </div>
         <div className="pt-4">
-          <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all border border-yellow-400/20 hover:bg-gray-800">Commit User Updates</button>
+          <ActionButton type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all border border-yellow-400/20 hover:bg-gray-800">Commit User Updates</ActionButton>
         </div>
-      </form>
+      </ActionForm>
     </Modal>
   );
 };
@@ -172,9 +173,9 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, currentU
       <div className="bg-white px-4 py-3 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-3">
         <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">System Access Registry</span>
         <div className="ml-auto">
-          <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
+          <ActionButton onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
             <PlusIcon className="w-3.5 h-3.5 mr-1" /> Add User
-          </button>
+          </ActionButton>
         </div>
       </div>
 
@@ -206,10 +207,10 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, currentU
                   </div>
                 </td>
                 <td className="px-4 py-2">
-                  <button onClick={() => handleOpenEditModal(user)} title="Edit User"
+                  <ActionButton onClick={() => handleOpenEditModal(user)} title="Edit User"
                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                     <EditIcon className="w-3.5 h-3.5" />
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}
@@ -223,7 +224,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, currentU
       </div>
       
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Register New Personnel">
-        <form onSubmit={handleAddUser} className="space-y-6">
+        <ActionForm onSubmit={handleAddUser} className="space-y-6">
           <div className="grid grid-cols-1 gap-5">
               <div>
                   <label className={labelStyle}>Display Name</label>
@@ -262,9 +263,9 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, currentU
               )}
           </div>
           <div className="pt-4">
-            <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Authorize Personnel Registry</button>
+            <ActionButton type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Authorize Personnel Registry</ActionButton>
           </div>
-        </form>
+        </ActionForm>
       </Modal>
 
       <EditUserModal

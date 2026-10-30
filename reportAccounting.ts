@@ -3,7 +3,14 @@ import { department } from './stockMath.ts';
 export type DepartmentFilter = AssignedDepartment | 'all';
 export type AccountingPeriod = 'all' | 'year' | 'month' | 'today' | 'yesterday' | 'custom';
 export interface AccountingFilter { period: AccountingPeriod; dateMode?: 'specific' | 'range'; start?: string; end?: string; now?: Date }
-export const businessDay = (value: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+const dayFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kampala',year:'numeric',month:'2-digit',day:'2-digit'});
+const dayCache=new Map<string,string>();
+export const businessDay=(value:string|Date)=>{
+ const key=value instanceof Date?value.toISOString():value;
+ const existing=dayCache.get(key);if(existing)return existing;
+ const day=dayFormatter.format(new Date(value));
+ if(dayCache.size>=20000)dayCache.clear();dayCache.set(key,day);return day;
+};
 export function inPeriod(value: string, filter: AccountingFilter) {
   if (!Number.isFinite(new Date(value).getTime())) return false;
   const day = businessDay(value), today = businessDay(filter.now || new Date());

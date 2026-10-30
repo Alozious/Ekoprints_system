@@ -1,3 +1,4 @@
+import ActionButton, {ActionForm} from './ActionButton';
 
 import React, { useState } from 'react';
 import Logo from './Logo';
@@ -32,7 +33,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             <p className="text-center text-gray-400 font-bold tracking-[0.15em] uppercase text-[10px]">Secure Access Portal</p>
         </div>
         
-        <form onSubmit={handleLogin} className="space-y-6">
+        <ActionForm onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Account Email</label>
             <input
@@ -65,19 +66,19 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           )}
 
           <div className="pt-4">
-            <button
+            <ActionButton
               type="submit"
               disabled={loading}
               className="w-full py-5 px-6 rounded-2xl shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] text-xs font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:bg-blue-400 transition-all active:scale-95 uppercase tracking-[0.2em]"
             >
               {loading ? 'Authenticating...' : 'Sign In'}
-            </button>
+            </ActionButton>
           </div>
           
           <p className="text-center text-gray-300 text-[10px] font-bold uppercase tracking-widest pt-4">
             Eko Prints &copy; {new Date().getFullYear()}
           </p>
-        </form>
+        </ActionForm>
       </div>
     </div>
   );

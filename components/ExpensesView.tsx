@@ -1,3 +1,4 @@
+import ActionButton, {ActionForm} from './ActionButton';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Expense, User, ExpenseCategory } from '../types';
@@ -75,9 +76,9 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
     setIsConfirmModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (expenseToDelete) {
-      onDeleteExpense(expenseToDelete.id);
+      await onDeleteExpense(expenseToDelete.id);
       setExpenseToDelete(null);
     }
   };
@@ -231,21 +232,21 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                             <span className="text-gray-300 font-black text-xs shrink-0">–</span>
                             <input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)}
                                 className="flex-1 min-w-[110px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none" />
-                            <button onClick={handleExportCSV}
+                            <ActionButton onClick={handleExportCSV}
                                 className="shrink-0 flex items-center px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100 whitespace-nowrap">
                                 <DocumentTextIcon className="w-3.5 h-3.5 mr-1" /> CSV
-                            </button>
-                            <button onClick={handleExportPDF}
+                            </ActionButton>
+                            <ActionButton onClick={handleExportPDF}
                                 className="shrink-0 flex items-center px-3 py-2 bg-rose-50 text-rose-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 whitespace-nowrap">
                                 <PrintIcon className="w-3.5 h-3.5 mr-1" /> PDF
-                            </button>
+                            </ActionButton>
                         </>
                     )}
 
-                    <button onClick={() => setIsAddModalOpen(true)}
+                    <ActionButton onClick={() => setIsAddModalOpen(true)}
                         className="shrink-0 bg-yellow-500 text-[#1A2232] px-5 py-2 rounded-xl font-black flex items-center shadow-md hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-600/10 whitespace-nowrap ml-auto">
                         <PlusIcon className="w-4 h-4 mr-1.5" /> Add Expense
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
 
@@ -278,14 +279,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                                 {currentUser.role === 'admin' && (
                                     <td className="px-4 py-2">
                                         <div className="flex items-center justify-start gap-1">
-                                            <button onClick={() => handleOpenEditModal(expense)} title="Edit"
+                                            <ActionButton onClick={() => handleOpenEditModal(expense)} title="Edit"
                                                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                 <EditIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => handleDeleteClick(expense)} title="Delete"
+                                            </ActionButton>
+                                            <ActionButton onClick={() => handleDeleteClick(expense)} title="Delete"
                                                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                                 <TrashIcon className="w-3.5 h-3.5" />
-                                            </button>
+                                            </ActionButton>
                                         </div>
                                     </td>
                                 )}
@@ -309,8 +310,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                         </p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1.5">
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">‹</button>
+                                <ActionButton onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">‹</ActionButton>
                                 {(() => {
                                     const pages: number[] = [];
                                     const maxVisible = 5;
@@ -319,14 +320,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                                     if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
                                     for (let i = start; i <= end; i++) pages.push(i);
                                     return pages.map(page => (
-                                        <button key={page} onClick={() => setCurrentPage(page)}
+                                        <ActionButton key={page} onClick={() => setCurrentPage(page)}
                                             className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
                                             {page}
-                                        </button>
+                                        </ActionButton>
                                     ));
                                 })()}
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">›</button>
+                                <ActionButton onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm">›</ActionButton>
                             </div>
                         )}
                     </div>
@@ -335,7 +336,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
 
       {/* Add New Expense Modal - High Contrast Dark Inputs */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="New Disbursement Entry">
-        <form onSubmit={handleAddExpense} className="space-y-6">
+        <ActionForm onSubmit={handleAddExpense} className="space-y-6">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                <div className="space-y-1.5">
                   <label className={labelStyle}>Date of Occurrence</label>
@@ -358,14 +359,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
               </div>
            </div>
           <div className="pt-4">
-            <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Add Expense to Master Log</button>
+            <ActionButton type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Add Expense to Master Log</ActionButton>
           </div>
-        </form>
+        </ActionForm>
       </Modal>
 
       {editingExpense && (
         <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Correct Transaction">
-            <form onSubmit={handleUpdateExpense} className="space-y-6">
+            <ActionForm onSubmit={handleUpdateExpense} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-1.5">
                         <label className={labelStyle}>Effective Date</label>
@@ -388,9 +389,9 @@ const ExpensesView: React.FC<ExpensesViewProps> = (props) => {
                     </div>
                 </div>
                 <div className="pt-4">
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all border border-yellow-400/20">Authorize Change</button>
+                    <ActionButton type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all border border-yellow-400/20">Authorize Change</ActionButton>
                 </div>
-            </form>
+            </ActionForm>
         </Modal>
       )}
 

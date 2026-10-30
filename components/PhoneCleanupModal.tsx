@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import React, { useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import type { Customer } from '../types';
@@ -25,7 +26,7 @@ export default function PhoneCleanupModal({ customers, onClose, onSave }: { cust
             <div className="max-h-72 overflow-auto"><table className="w-full text-left"><thead><tr><th>Customer</th><th>Current phone</th><th>Cleaned phone</th></tr></thead><tbody>{preview.map(({ customer, phone }) => <tr key={customer.id}><td className="p-2">{customer.name}</td><td className="p-2">{customer.phone}</td><td className={`p-2 ${phone === null ? 'text-red-700' : 'text-emerald-700'}`}>{phone === null ? 'Needs manual correction' : phone}</td></tr>)}</tbody></table></div>
             {!preview.length && <p>All recorded phone numbers are already clean.</p>}
             {message && <p role="status">{message}</p>}
-            <div className="flex justify-end gap-3"><button disabled={busy} onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-xl">Close</button><button disabled={busy || !changes.length} onClick={save} className="px-4 py-2 bg-yellow-400 rounded-xl font-bold disabled:opacity-40">{busy ? 'Saving…' : `Clean ${changes.length} numbers`}</button></div>
+            <div className="flex justify-end gap-3"><ActionButton disabled={busy} onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-xl">Close</ActionButton><ActionButton disabled={busy || !changes.length} onClick={save} className="px-4 py-2 bg-yellow-400 rounded-xl font-bold disabled:opacity-40">{busy ? 'Saving…' : `Clean ${changes.length} numbers`}</ActionButton></div>
         </div>
     </Modal>;
 }

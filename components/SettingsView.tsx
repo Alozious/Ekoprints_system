@@ -1,3 +1,4 @@
+import ActionButton, {ActionForm} from './ActionButton';
 import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useEffect } from 'react';
@@ -67,7 +68,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                 <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">System Settings</h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <ActionForm onSubmit={handleSubmit} className="space-y-6">
                 <section className="bg-white rounded-2xl p-6 space-y-3">
                     <h3 className="font-bold flex items-center gap-2">Customer categories <InfoTooltip label="Customer category information">Enter one category per line. Removing a choice leaves existing records unchanged. Use Save Settings below to save.</InfoTooltip></h3>
                     <textarea aria-label="Customer categories" rows={5} className={inputClass} value={(formData.customerCategories || []).join('\n')} onChange={e => setFormData({ ...formData, customerCategories: e.target.value.split('\n') })} />
@@ -147,7 +148,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                                 className={`${inputClass} mt-0`}
                                 placeholder="Enter rule or term (e.g. Valid for 14 days, Deposit non-refundable)"
                             />
-                            <button
+                            <ActionButton
                                 type="button"
                                 onClick={() => {
                                     if (newRule.trim()) {
@@ -161,14 +162,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                                 className="bg-yellow-400 text-[#1A2232] px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all shrink-0"
                             >
                                 Add Rule
-                            </button>
+                            </ActionButton>
                         </div>
 
                         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                             {(formData.predefinedRules || []).map((rule, idx) => (
                                 <div key={idx} className="flex justify-between items-center p-3 bg-gray-50/50 rounded-xl border border-gray-100 hover:border-yellow-400 transition-all">
                                     <span className="text-[11px] font-bold text-gray-900">{rule}</span>
-                                    <button
+                                    <ActionButton
                                         type="button"
                                         onClick={() => {
                                             setFormData(prev => ({
@@ -179,7 +180,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                                         className="text-gray-300 hover:text-red-500 p-1"
                                     >
                                         <TrashIcon className="w-4 h-4" />
-                                    </button>
+                                    </ActionButton>
                                 </div>
                             ))}
                             {(formData.predefinedRules || []).length === 0 && (
@@ -190,20 +191,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                 </div>
 
                 <div className="flex justify-end">
-                    <button type="submit" className="bg-[#1A2232] text-yellow-400 px-10 py-4 rounded-2xl font-black flex items-center shadow-xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-400/20">
+                    <ActionButton type="submit" className="bg-[#1A2232] text-yellow-400 px-10 py-4 rounded-2xl font-black flex items-center shadow-xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-400/20">
                         <SaveIcon className="w-5 h-5 mr-3" /> Commit System Changes
-                    </button>
+                    </ActionButton>
                 </div>
-            </form>
+            </ActionForm>
 
             {/* Expense Categories */}
             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Expense Categories</h3>
-                    <button onClick={() => setIsCatAddOpen(true)}
+                    <ActionButton onClick={() => setIsCatAddOpen(true)}
                         className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all">
                         <PlusIcon className="w-4 h-4 mr-1" /> New Category
-                    </button>
+                    </ActionButton>
                 </div>
                 <table className="w-full text-sm text-left">
                     <thead className="text-[9px] text-gray-400 uppercase bg-gray-50 font-black tracking-widest">
@@ -218,14 +219,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                                 <td className="px-4 py-2.5 font-bold text-gray-900 text-[11px]">{cat.name}</td>
                                 <td className="px-4 py-2.5">
                                     <div className="flex items-center gap-1">
-                                        <button onClick={() => { setEditingCat(cat); setIsCatEditOpen(true); }} title="Edit"
+                                        <ActionButton onClick={() => { setEditingCat(cat); setIsCatEditOpen(true); }} title="Edit"
                                             className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                             <EditIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => { setDeletingCat(cat); setIsCatDeleteOpen(true); }} title="Delete"
+                                        </ActionButton>
+                                        <ActionButton onClick={() => { setDeletingCat(cat); setIsCatDeleteOpen(true); }} title="Delete"
                                             className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                             <TrashIcon className="w-3.5 h-3.5" />
-                                        </button>
+                                        </ActionButton>
                                     </div>
                                 </td>
                             </tr>
@@ -239,27 +240,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
 
             {/* Add Category Modal */}
             <Modal isOpen={isCatAddOpen} onClose={() => setIsCatAddOpen(false)} title="New Expense Category">
-                <form onSubmit={handleAddCategory} className="space-y-4">
+                <ActionForm onSubmit={handleAddCategory} className="space-y-4">
                     <label className={labelClass}>Category Name</label>
                     <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)}
                         className={inputClass} required autoFocus placeholder="e.g. Electricity" />
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">
+                    <ActionButton type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">
                         Add Category
-                    </button>
-                </form>
+                    </ActionButton>
+                </ActionForm>
             </Modal>
 
             {/* Edit Category Modal */}
             {editingCat && (
                 <Modal isOpen={isCatEditOpen} onClose={() => { setIsCatEditOpen(false); setEditingCat(null); }} title="Edit Category">
-                    <form onSubmit={handleUpdateCategory} className="space-y-4">
+                    <ActionForm onSubmit={handleUpdateCategory} className="space-y-4">
                         <label className={labelClass}>Category Name</label>
                         <input type="text" value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
                             className={inputClass} required autoFocus />
-                        <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">
+                        <ActionButton type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all">
                             Save Changes
-                        </button>
-                    </form>
+                        </ActionButton>
+                    </ActionForm>
                 </Modal>
             )}
 

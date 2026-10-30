@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
@@ -61,7 +62,7 @@ const SearchableMaterialSelect: React.FC<{
 
     return (
         <div className="relative" ref={wrapperRef}>
-            <button
+            <ActionButton
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center justify-between w-full px-3 py-2 text-sm text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-black font-bold"
@@ -70,7 +71,7 @@ const SearchableMaterialSelect: React.FC<{
                     {selectedItem ? `${selectedItem.width}m | ${selectedItem.itemName}` : "Select Material Roll..."}
                 </span>
                 <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-            </button>
+            </ActionButton>
 
             {isOpen && (
                 <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
@@ -222,12 +223,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
                     <p className="text-red-600 font-bold text-sm">Action required for <span className="underline decoration-2">{pendingLogs.length}</span> invoices to maintain stock accuracy.</p>
                 </div>
             </div>
-            <button 
+            <ActionButton 
                 onClick={() => handleOpenUsageModal(pendingLogs[0])}
                 className="bg-red-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center uppercase tracking-widest text-xs z-10 shrink-0"
             >
                 Log Recent Transaction
-            </button>
+            </ActionButton>
             <BeakerIcon className="absolute right-0 bottom-0 w-32 h-32 text-red-500 opacity-5 -mr-8 -mb-8 rotate-12" />
         </div>
       )}
@@ -369,12 +370,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ sales, expenses, stockIte
                   </table>
               </div>
 
-              <button 
+              <ActionButton 
                 onClick={handleSaveUsage} 
                 className="w-full bg-[#0f172a] text-yellow-400 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 border border-yellow-400/20"
               >
                 Submit Usage Log & Re-calculate Stock
-              </button>
+              </ActionButton>
           </div>
       </Modal>
     </div>

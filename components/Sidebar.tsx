@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 
 import React from 'react';
 import { DashboardIcon, SalesIcon, InventoryIcon, ExpensesIcon, CustomersIcon, UsersIcon, CalculatorIcon, CogIcon } from './icons';
@@ -13,7 +14,7 @@ interface SidebarProps {
 }
 
 const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{ className?: string }>, name: string, isActive: boolean, onClick: () => void }) => (
-    <button
+    <ActionButton
         onClick={onClick}
         className={`w-full flex items-center space-x-3 py-3 px-4 rounded-lg transition-colors duration-200 relative ${isActive
                 ? 'bg-yellow-400 text-[#1A2232] shadow-lg'
@@ -23,7 +24,7 @@ const NavItem = ({ icon: Icon, name, isActive, onClick }: { icon: React.FC<{ cla
         {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-white rounded-r-full"></div>}
         <Icon className="w-5 h-5" />
         <span className="font-semibold">{name}</span>
-    </button>
+    </ActionButton>
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, currentUser, isOpen = false, onClose }) => {

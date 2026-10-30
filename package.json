@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test:accounting": "node --experimental-strip-types --test reportAccounting.test.mjs stockService.test.mjs statementExport.test.mjs kuyiriba.test.mjs invoiceVisibility.test.mjs calculatorPricing.test.mjs",
+    "test:accounting": "node --experimental-strip-types --test reportAccounting.test.mjs stockService.test.mjs statementExport.test.mjs kuyiriba.test.mjs invoiceVisibility.test.mjs calculatorPricing.test.mjs dashboardInsights.test.mjs",
     "test:inventory": "node --experimental-strip-types --test stockMath.test.mjs inventorySetup.test.mjs inventoryView.test.mjs materialResale.test.mjs inventoryPurchaseHistory.test.mjs",
     "test:stock": "node --experimental-strip-types --test stockMath.test.mjs",
     "dev": "vite",
@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "firebase": "^12.4.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.3",
     "recharts": "^3.3.0",
@@ -27,6 +29,3 @@
     "vite": "^6.2.0"
   }
 }
-
-
-

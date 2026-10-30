@@ -1,3 +1,4 @@
+import ActionButton, {ActionForm} from './ActionButton';
 import { invoiceItems } from '../kuyiriba';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -69,7 +70,7 @@ const EditCustomerModal: React.FC<{
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Edit Customer Profile`}>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <ActionForm onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Legal Name</label>
@@ -92,9 +93,9 @@ const EditCustomerModal: React.FC<{
                     {(['category', 'district'] as const).map(field => <label className="text-sm capitalize" key={field}>{field}{field === 'category' ? <select aria-label="Customer category" value={formData.category || ''} onChange={e => setFormData({ ...formData, category: e.target.value })} className={darkInput}><option value="">No category</option>{[...new Set([...(categories), ...(formData.category ? [formData.category] : [])])].map(c => <option key={c} value={c}>{c}</option>)}</select> : <input aria-label={`Customer ${field}`} value={formData[field] || ''} onChange={e => setFormData({ ...formData, [field]: e.target.value })} className={darkInput} />}</label>)}
                 </div>
                 <div className="pt-4">
-                    <button type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all border border-yellow-400/20">Save Profile Updates</button>
+                    <ActionButton type="submit" className="w-full bg-[#1A2232] text-yellow-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-gray-800 transition-all border border-yellow-400/20">Save Profile Updates</ActionButton>
                 </div>
-            </form>
+            </ActionForm>
         </Modal>
     );
 };
@@ -253,7 +254,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
             return;
         }
 
-        const selectedSales = customerSales.filter(s => selectedSaleIds.includes(s.id));
+        const selectedSales = customerSales.filter(s => selectedSaleIds.includes(s.id)).sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime());
         const totalInvoiced = selectedSales.reduce((sum, s) => sum + s.total, 0);
         const totalPaid = selectedSales.reduce((sum, s) => sum + (s.amountPaid || 0), 0);
 
@@ -362,7 +363,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                   Payment Log Details
                   <div style="width:15px; height:1px; background:#e2e8f0; margin-left:10px;"></div>
                 </div>
-                ${sale.payments.map(p => `
+                ${[...sale.payments].sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime()).map(p => `
                   <div class="payment-log-row">
                     <span>${new Date(p.date).toLocaleString()}</span>
                     <span>Received By: ${p.recordedBy}</span>
@@ -405,9 +406,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
         setIsConfirmModalOpen(true);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (customerToDelete) {
-            onDeleteCustomer(customerToDelete.id);
+            await onDeleteCustomer(customerToDelete.id);
             setCustomerToDelete(null);
         }
     };
@@ -575,18 +576,18 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                 </label>
 
                 <div className="ml-auto flex items-center gap-2">
-                    <button onClick={() => setIsNamesOpen(true)} className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Check customer names</button>
-                    <button onClick={() => setIsCleanupOpen(true)} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Clean phone numbers</button>
-                    <button onClick={() => setIsImportOpen(true)} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 whitespace-nowrap">Import Excel</button>
-                    <button onClick={handleExportCSV} className="flex items-center bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100">
+                    <ActionButton onClick={() => setIsNamesOpen(true)} className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Check customer names</ActionButton>
+                    <ActionButton onClick={() => setIsCleanupOpen(true)} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Clean phone numbers</ActionButton>
+                    <ActionButton onClick={() => setIsImportOpen(true)} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 whitespace-nowrap">Import Excel</ActionButton>
+                    <ActionButton onClick={handleExportCSV} className="flex items-center bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100">
                         <DocumentTextIcon className="w-3.5 h-3.5 mr-1" /> CSV
-                    </button>
-                    <button onClick={handleExportPDF} className="flex items-center bg-rose-50 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100">
+                    </ActionButton>
+                    <ActionButton onClick={handleExportPDF} className="flex items-center bg-rose-50 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100">
                         <PrintIcon className="w-3.5 h-3.5 mr-1" /> PDF
-                    </button>
-                    <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
+                    </ActionButton>
+                    <ActionButton onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-yellow-400 text-[#1A2232] px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 shadow-md active:scale-95 transition-all whitespace-nowrap">
                         <PlusIcon className="w-3.5 h-3.5 mr-1" /> Add Customer
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
 
@@ -628,18 +629,18 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                                 </td>
                                 <td className="px-4 py-2">
                                     <div className="flex items-center gap-1">
-                                        <button onClick={() => handleViewDetails(customer)} title="Details"
+                                        <ActionButton onClick={() => handleViewDetails(customer)} title="Details"
                                             className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
                                             <DocumentTextIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => handleOpenEditModal(customer)} title="Edit"
+                                        </ActionButton>
+                                        <ActionButton onClick={() => handleOpenEditModal(customer)} title="Edit"
                                             className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                             <EditIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => handleDeleteClick(customer)} title="Delete"
+                                        </ActionButton>
+                                        <ActionButton onClick={() => handleDeleteClick(customer)} title="Delete"
                                             className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                             <TrashIcon className="w-3.5 h-3.5" />
-                                        </button>
+                                        </ActionButton>
                                     </div>
                                 </td>
                             </tr>
@@ -659,21 +660,21 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                             Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, sortedCustomers.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, sortedCustomers.length)} of {sortedCustomers.length}
                         </span>
                         <div className="flex items-center gap-1">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">‹</button>
+                            <ActionButton onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">‹</ActionButton>
                             {Array.from({ length: totalPages }, (_, i) => i + 1)
                                 .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
                                 .map((p, idx, arr) => (
                                     <React.Fragment key={p}>
                                         {idx > 0 && arr[idx - 1] !== p - 1 && <span className="text-gray-300 text-[10px]">…</span>}
-                                        <button onClick={() => setCurrentPage(p)}
+                                        <ActionButton onClick={() => setCurrentPage(p)}
                                             className={`w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${p === currentPage ? 'bg-[#1A2232] text-yellow-400' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                                             {p}
-                                        </button>
+                                        </ActionButton>
                                     </React.Fragment>
                                 ))}
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">›</button>
+                            <ActionButton onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-all">›</ActionButton>
                         </div>
                     </div>
                 )}
@@ -681,7 +682,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
 
             {/* Add Customer Modal */}
             <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Register New Client">
-                <form onSubmit={handleAddCustomer} className="space-y-6">
+                <ActionForm onSubmit={handleAddCustomer} className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">{(['category', 'district'] as const).map(field => <label key={field} className="text-sm capitalize">{field}{field === 'category' ? <select aria-label="New customer category" value={newCustomer.category || ''} onChange={e => setNewCustomer({ ...newCustomer, category: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3"><option value="">No category</option>{[...new Set([...(settings.customerCategories || []), ...(newCustomer.category ? [newCustomer.category] : [])])].map(c => <option key={c} value={c}>{c}</option>)}</select> : <input aria-label={`New customer ${field}`} value={newCustomer[field] || ''} onChange={e => setNewCustomer({ ...newCustomer, [field]: e.target.value })} className="block w-full rounded-xl bg-gray-800 text-white p-3" />}</label>)}</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="md:col-span-2 space-y-1.5">
@@ -702,9 +703,9 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                         </div>
                     </div>
                     <div className="pt-4">
-                        <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Enrol Customer to Registry</button>
+                        <ActionButton type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700 border border-blue-500/20">Enrol Customer to Registry</ActionButton>
                     </div>
-                </form>
+                </ActionForm>
             </Modal>
 
             {/* Edit Customer Modal */}
@@ -742,12 +743,12 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                             <div className="flex justify-between items-center mb-4 ml-1">
                                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transactional Archive</h3>
                                 {selectedSaleIds.length > 0 && (
-                                    <button
+                                    <ActionButton
                                         onClick={handleGenerateCustomerStatement}
                                         className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg flex items-center"
                                     >
                                         <PrintIcon className="w-3.5 h-3.5 mr-2" /> Generate Statement ({selectedSaleIds.length})
-                                    </button>
+                                    </ActionButton>
                                 )}
                             </div>
                             {customerSales.length > 0 ? (
@@ -794,7 +795,7 @@ const CustomersView: React.FC<CustomersViewProps> = ({ customers, sales, onAddCu
                                                             </span>
                                                         </td>
                                                         <td className="px-5 py-3 text-center">
-                                                            <button onClick={() => setInvoiceToView(sale)} className="text-blue-600 hover:text-blue-800 transition-colors p-1.5 hover:bg-blue-50 rounded-lg"><DocumentTextIcon className="w-4 h-4" /></button>
+                                                            <ActionButton onClick={() => setInvoiceToView(sale)} className="text-blue-600 hover:text-blue-800 transition-colors p-1.5 hover:bg-blue-50 rounded-lg"><DocumentTextIcon className="w-4 h-4" /></ActionButton>
                                                         </td>
                                                     </tr>
                                                 );

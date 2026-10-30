@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import {calculatorTiers,dimensionPrice} from '../calculatorPricing';
 import KuyiribaCalculator from './KuyiribaCalculator';
 import { materialResaleCatalog } from '../materialResale';
@@ -431,14 +432,14 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
             <div className={embeddedDepartment ? 'min-w-0' : 'bg-[#F4F7F9] rounded-[2.5rem] shadow-sm overflow-hidden h-full flex flex-col p-4 space-y-4'}>
                 {!embeddedDepartment&&<div className="grid grid-cols-3 sm:grid-cols-7 border-b border-gray-200 shrink-0 min-w-0" aria-label="Calculator departments">
                     {CALCULATOR_TABS.map(tab => (
-                        <button
+                        <ActionButton
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             aria-pressed={activeTab===tab.id}
                             className={`min-w-0 px-1 py-3 text-[9px] font-bold leading-tight break-words border-b-2 transition-colors ${activeTab === tab.id ? 'bg-yellow-50 border-yellow-400 text-gray-900' : 'border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
                         >
                             {tab.label}
-                        </button>
+                        </ActionButton>
                     ))}
                 </div>}
 
@@ -449,13 +450,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                             {/* Paper Presets */}
                             <div className="flex flex-wrap gap-2 justify-between">
                                 {visiblePaperSizes.map((name) => (
-                                    <button 
+                                    <ActionButton 
                                         key={name} 
                                         onClick={() => handlePresetClick(name, PAPER_SIZES[name])} 
                                         className={`flex-1 py-3 text-[11px] font-black rounded-xl border-2 transition-all hover:scale-105 uppercase tracking-widest shadow-sm ${PAPER_SIZE_STYLES[name] || 'bg-gray-100 text-gray-700 border-gray-100'}`}
                                     >
                                         {name}
-                                    </button>
+                                    </ActionButton>
                                 ))}
                             </div>
 
@@ -571,9 +572,9 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
                                     </div>
                                 </div>
-                                <button onClick={handleAddDimToQuote} className="flex-1 bg-[#1A2232] text-yellow-400 font-black rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-[0.25em] text-xs border border-yellow-400/10 px-4">
+                                <ActionButton onClick={handleAddDimToQuote} className="flex-1 bg-[#1A2232] text-yellow-400 font-black rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-[0.25em] text-xs border border-yellow-400/10 px-4">
                                     Append To Scratchpad
-                                </button>
+                                </ActionButton>
                             </div>
                         </div>
                     )}
@@ -653,9 +654,9 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         </div>
                                     </div>
 
-                                    <button onClick={handleAddSimpleToQuote} className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all uppercase tracking-[0.25em] text-xs border border-yellow-400/10">
+                                    <ActionButton onClick={handleAddSimpleToQuote} className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all uppercase tracking-[0.25em] text-xs border border-yellow-400/10">
                                         Append To Scratchpad
-                                    </button>
+                                    </ActionButton>
                                 </div>
                             )}
                         </div>
@@ -708,9 +709,9 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                 </div>
                             </div>
 
-                            <button onClick={handleAddManualToQuote} className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all uppercase tracking-[0.25em] text-xs border border-yellow-400/10">
+                            <ActionButton onClick={handleAddManualToQuote} className="w-full bg-[#1A2232] text-yellow-400 font-black py-5 rounded-[1.8rem] shadow-2xl hover:bg-gray-800 transition-all uppercase tracking-[0.25em] text-xs border border-yellow-400/10">
                                 Append To Scratchpad
-                            </button>
+                            </ActionButton>
                         </div>
                     )}
                 </div>
@@ -724,9 +725,9 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                          <h3 className="text-sm font-black text-gray-900 tracking-widest uppercase">Order Scratchpad</h3>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={handleClearQuote} className="text-[10px] font-black text-gray-300 hover:text-red-500 uppercase tracking-widest transition-all">Wipe</button>
-                        <button onClick={handleCreateQuotationClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-yellow-400 text-gray-900 px-6 py-3 rounded-2xl shadow-sm hover:bg-yellow-500 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Quotation</button>
-                        <button onClick={handleCreateSaleClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-[#E2E8F0] text-[#94A3B8] px-8 py-3 rounded-2xl shadow-sm hover:bg-[#1A2232] hover:text-yellow-400 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Post Order</button>
+                        <ActionButton onClick={handleClearQuote} className="text-[10px] font-black text-gray-300 hover:text-red-500 uppercase tracking-widest transition-all">Wipe</ActionButton>
+                        <ActionButton onClick={handleCreateQuotationClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-yellow-400 text-gray-900 px-6 py-3 rounded-2xl shadow-sm hover:bg-yellow-500 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Quotation</ActionButton>
+                        <ActionButton onClick={handleCreateSaleClick} disabled={quoteItems.length === 0} className="text-[11px] font-black bg-[#E2E8F0] text-[#94A3B8] px-8 py-3 rounded-2xl shadow-sm hover:bg-[#1A2232] hover:text-yellow-400 transition-all disabled:opacity-50 uppercase tracking-widest active:scale-95">Post Order</ActionButton>
                     </div>
                 </div>
                 
@@ -747,8 +748,8 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                         </div>
                                         <div className="flex items-center shrink-0 gap-2">
                                             <p className="font-black text-gray-900 text-sm mr-2 tracking-tighter">{formatUGX(item.price * item.quantity)}</p>
-                                            <button onClick={() => handleRecallQuoteItem(index)} title="Recall & Edit" className="p-2.5 bg-white text-gray-400 hover:text-blue-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><EditIcon className="w-4 h-4" /></button>
-                                            <button onClick={() => handleRemoveQuoteItem(index)} title="Remove" className="p-2.5 bg-white text-gray-300 hover:text-red-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><TrashIcon className="w-4 h-4" /></button>
+                                            <ActionButton onClick={() => handleRecallQuoteItem(index)} title="Recall & Edit" className="p-2.5 bg-white text-gray-400 hover:text-blue-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><EditIcon className="w-4 h-4" /></ActionButton>
+                                            <ActionButton onClick={() => handleRemoveQuoteItem(index)} title="Remove" className="p-2.5 bg-white text-gray-300 hover:text-red-500 rounded-xl transition-all shadow-sm group-hover:scale-110"><TrashIcon className="w-4 h-4" /></ActionButton>
                                         </div>
                                     </div>
                                 ))}
@@ -763,7 +764,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                             {(settings.predefinedRules || []).map((rule, idx) => {
                                                 const isSelected = selectedRules.includes(rule);
                                                 return (
-                                                    <button
+                                                    <ActionButton
                                                         key={idx}
                                                         type="button"
                                                         onClick={() => {
@@ -776,7 +777,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                                         className={`text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border transition-all ${isSelected ? 'bg-yellow-400 text-gray-900 border-yellow-400' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'}`}
                                                     >
                                                         {rule}
-                                                    </button>
+                                                    </ActionButton>
                                                 );
                                             })}
                                             {(settings.predefinedRules || []).length === 0 && (
@@ -802,7 +803,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                                     }
                                                 }}
                                             />
-                                            <button
+                                            <ActionButton
                                                 type="button"
                                                 onClick={() => {
                                                     if (customRuleInput.trim()) {
@@ -813,7 +814,7 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                                 className="bg-gray-900 text-yellow-400 px-3 rounded-xl text-[9px] font-black uppercase hover:bg-gray-800"
                                             >
                                                 Add
-                                            </button>
+                                            </ActionButton>
                                         </div>
 
                                         {/* List of active rules (editable on the fly) */}
@@ -831,13 +832,13 @@ const CalculatorView: React.FC<CalculatorViewProps> = ({ stockItems, pricingTier
                                                             }}
                                                             className="block flex-1 rounded-lg border border-gray-100 bg-white text-gray-900 text-[10px] font-medium px-2 py-1 outline-none"
                                                         />
-                                                        <button
+                                                        <ActionButton
                                                             type="button"
                                                             onClick={() => setSelectedRules(prev => prev.filter((_, i) => i !== idx))}
                                                             className="text-gray-300 hover:text-red-500 text-[10px] font-bold"
                                                         >
                                                             ✕
-                                                        </button>
+                                                        </ActionButton>
                                                     </div>
                                                 ))}
                                             </div>

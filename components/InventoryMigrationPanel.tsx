@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import InfoTooltip from './InfoTooltip';
 import React, { useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
@@ -56,14 +57,14 @@ export default function InventoryMigrationPanel({ settings, onUpdateSettings }: 
   return <section className="bg-white p-6 rounded-2xl space-y-4 border border-gray-100">
     <h3 className="font-bold">Unopened inventory migration (admin)</h3>
     <p className="text-sm text-gray-600">Back up/export Firestore first. Test on a project copy or emulator. Keep other users out during migration. No automatic meter conversion.</p>
-    <button className="bg-gray-100 text-gray-900 px-4 py-2 rounded-xl" disabled={busy} onClick={exportBackup}>Export migration backup (JSON)</button>
+    <ActionButton className="bg-gray-100 text-gray-900 px-4 py-2 rounded-xl" disabled={busy} onClick={exportBackup}>Export migration backup (JSON)</ActionButton>
     {backupDownload && <a className="block text-blue-700 underline" href={backupDownload.url} download={backupDownload.filename}>Download inventory backup JSON</a>}
     <p className="text-xs text-gray-500">Exports the seven collections this migration can change, including document IDs. This is an application JSON snapshot, not a managed full-database export. {backupExported ? 'Backup download requested.' : ''}</p>
     <label className="flex gap-2"><input type="checkbox" disabled={busy || settings.inventoryMigrationV1} checked={!!settings.inventoryMigrationEnabled} onChange={async e => {
       try { await onUpdateSettings({ ...settings, inventoryMigrationEnabled: e.target.checked }); }
       catch (error) { setMessage(error instanceof Error ? error.message : 'Settings update failed.'); }
     }} />Enable manual migration</label>
-    <button className="bg-gray-900 text-yellow-400 px-4 py-2 rounded-xl" disabled={busy || !settings.inventoryMigrationEnabled || settings.inventoryMigrationV1} onClick={preview}>Preview opening counts</button>
+    <ActionButton className="bg-gray-900 text-yellow-400 px-4 py-2 rounded-xl" disabled={busy || !settings.inventoryMigrationEnabled || settings.inventoryMigrationV1} onClick={preview}>Preview opening counts</ActionButton>
     <p role="status" className="text-sm">{message}</p>
     <Modal isOpen={open} onClose={() => { if (!busy) setOpen(false); }} title="Confirm counted unopened stock" size="xl">
       <div className="space-y-4">
@@ -74,7 +75,7 @@ export default function InventoryMigrationPanel({ settings, onUpdateSettings }: 
         </table></div>
         <label className="block"><input type="checkbox" checked={backup} disabled={busy} onChange={e => setBackup(e.target.checked)} /> I exported/backed up Firestore.</label>
         <label className="block"><input type="checkbox" checked={confirm} disabled={busy} onChange={e => setConfirm(e.target.checked)} /> I confirm physical counts and maintenance mode.</label>
-        <button className="bg-yellow-400 text-gray-900 px-4 py-3 rounded-xl font-bold" disabled={busy || !backup || !confirm} onClick={migrate}>{busy ? 'Migrating…' : 'Create opening balances'}</button>
+        <ActionButton className="bg-yellow-400 text-gray-900 px-4 py-3 rounded-xl font-bold" disabled={busy || !backup || !confirm} onClick={migrate}>{busy ? 'Migrating…' : 'Create opening balances'}</ActionButton>
         <p role="alert">{message}</p>
       </div>
     </Modal>

@@ -1,0 +1,58 @@
+import React,{useMemo,useState} from 'react';
+import {ResponsiveContainer,ComposedChart,Bar,Line,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ReferenceLine,BarChart} from 'recharts';
+import ActionButton from './ActionButton';
+import InfoTooltip from './InfoTooltip';
+import {dashboardInsights} from '../dashboardInsights';
+import type {AccountingFilter,DepartmentFilter} from '../reportAccounting';
+import type {Sale,Expense,StockTransaction} from '../types';
+const money=(n:number)=>new Intl.NumberFormat('en-UG',{maximumFractionDigits:0}).format(n)+' UGX';
+const compact=(n:number)=>new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(n);
+const panel='bg-white border border-gray-100 rounded-3xl p-5 sm:p-7 shadow-sm min-w-0';
+const Empty=({text}:{text:string})=><div className="h-48 flex items-center justify-center text-sm text-gray-500 text-center p-4">{text}</div>;
+const tip={borderRadius:12,border:'1px solid #e2e8f0',fontSize:12};
+export default function DashboardCharts({sales,expenses,movements,filter,module,admin}:{sales:Sale[];expenses:Expense[];movements:StockTransaction[];filter:AccountingFilter;module:DepartmentFilter;admin:boolean}){
+ const [group,setGroup]=useState<'auto'|'daily'|'monthly'>('auto'),[showInvoices,setShowInvoices]=useState(false),[table,setTable]=useState(false),[itemMetric,setItemMetric]=useState<'value'|'quantity'>('value');
+ const monthly=group==='monthly'||group==='auto'&&(filter.period==='all'||filter.period==='year'||filter.period==='custom'&&!!filter.end&&!!filter.start&&(new Date(filter.end).getTime()-new Date(filter.start).getTime())>62*86400000);
+ const data=useMemo(()=>dashboardInsights(sales,expenses,movements,filter,module,monthly),[sales,expenses,movements,filter.period,filter.start,filter.end,filter.dateMode,module,monthly]);
+ const total=data.totals,net=admin?total.netProfit:total.cashCollected-total.operatingExpenses;
+ const costs=total.operatingExpenses+(admin?total.cogs+total.adjustments:0);
+ const expenseTotal=data.categories.reduce((n,r)=>n+r.value,0);
+ const top=data.categories[0];
+ const topItems=[...data.items].sort((a,b)=>b[itemMetric]-a[itemMetric]).slice(0,5);
+ const best=[...data.trend].sort((a,b)=>(admin?b.net:b.cashNet)-(admin?a.net:a.cashNet))[0];
+ const maxExpense=Math.max(1,...data.categories.map(r=>r.value)),maxItem=Math.max(1,...topItems.map(r=>r[itemMetric]));
+ const toggle=(active:boolean)=>`px-3 py-2 rounded-lg text-xs font-bold ${active?'bg-gray-900 text-white':'text-gray-600 hover:bg-gray-100'}`;
+ return <section aria-label="Business insights" className="space-y-5">
+  <div className={panel}>
+   <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex gap-2 items-center"><h3 className="text-lg font-black text-gray-900">{admin?'Are collections covering costs?':'Cash collected and operating expenses'}</h3><InfoTooltip label="Cash and cost trend"><p>Payments are shown on the date collected, including payments on earlier invoices. COGS includes started materials and posted order costs. Net profit also includes stock gains / losses. Purchases of unopened stock are not operating expenses. Partial months are limited to the selected dates. Charts follow Uganda time.</p><p>Invoiced sales include discounts and taxes. Item rankings allocate invoice totals across billed items; internal complementary work is excluded. Quantity combines the units recorded on each item.</p></InfoTooltip></div><p className="text-sm mt-1 text-gray-500">{monthly?'Monthly':'Daily'} results · UGX</p></div>
+   <div className="flex flex-wrap items-center gap-1 bg-gray-50 rounded-xl p-1">{(['auto','daily','monthly'] as const).map(g=><ActionButton key={g} aria-pressed={group===g} className={toggle(group===g)} onClick={()=>setGroup(g)}>{g==='auto'?'Auto':g==='daily'?'Daily':'Monthly'}</ActionButton>)}</div></div>
+   <div className="grid sm:grid-cols-3 gap-3 my-5">
+    <div className="bg-emerald-50 rounded-xl p-4"><p className="text-xs text-emerald-800">Cash collected</p><strong className="text-lg text-emerald-900">{money(total.cashCollected)}</strong></div>
+    <div className="bg-amber-50 rounded-xl p-4"><p className="text-xs text-amber-800">{admin?'Total costs':'Operating expenses'}</p><strong className="text-lg text-amber-900">{money(costs)}</strong></div>
+    <div className={`${net<0?'bg-rose-50':'bg-blue-50'} rounded-xl p-4`}><p className="text-xs text-gray-600">{admin?'Net profit / loss':'Net cash flow'}</p><strong className={`text-lg ${net<0?'text-rose-700':'text-blue-800'}`}>{money(net)}</strong></div>
+   </div>
+   <div className="flex flex-wrap justify-between items-center gap-3 mb-4"><p className="text-sm font-semibold text-gray-700">{costs||total.cashCollected?(net<0?`Costs exceeded collections by ${money(-net)}.`:`Collections exceeded costs by ${money(net)}.`):'No financial activity in this selection.'}</p><div className="flex items-center gap-4"><label className="text-xs flex gap-2 items-center"><input type="checkbox" checked={showInvoices} onChange={e=>setShowInvoices(e.target.checked)}/>Compare invoiced sales</label><ActionButton className="text-xs text-blue-700 font-bold" onClick={()=>setTable(!table)}>{table?'Hide figures':'View figures'}</ActionButton></div></div>
+   {data.trend.some(r=>r.cash||r.invoiced||r.expenses||admin&&(r.cogs||r.adjustments))?<div className="h-80"><ResponsiveContainer width="100%" height="100%"><ComposedChart accessibilityLayer data={data.trend} margin={{top:12,right:12,left:0,bottom:8}}>
+    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label" tick={{fontSize:11}} minTickGap={30} axisLine={false} tickLine={false}/><YAxis width={66} tickFormatter={compact} tick={{fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={tip} labelFormatter={(_,rows)=>rows?.[0]?.payload?.key||''} formatter={(v:number,name:string)=>[money(v),name]}/><Legend wrapperStyle={{fontSize:12,paddingTop:12}}/><ReferenceLine y={0} stroke="#94a3b8"/>
+    <Bar dataKey="cash" name="Cash collected" fill="#2563eb" radius={[4,4,0,0]} maxBarSize={26}/>
+    {admin&&<Bar dataKey="cogs" name="COGS" stackId="cost" fill="#f59e0b" maxBarSize={26}/>}
+    <Bar dataKey="expenses" name="Operating expenses" stackId="cost" fill="#fb7185" maxBarSize={26}/>
+    {admin&&<Bar dataKey="adjustments" name="Stock gains / losses" stackId="cost" fill="#a78bfa" maxBarSize={26}/>}
+    <Line type="linear" dataKey={admin?'net':'cashNet'} name={admin?'Net profit / loss':'Net cash flow'} stroke="#059669" strokeWidth={3} dot={data.trend.length<18} connectNulls={false}/>
+    {showInvoices&&<Line type="linear" dataKey="invoiced" name="Invoiced sales" stroke="#64748b" strokeDasharray="5 4" dot={false}/>}
+   </ComposedChart></ResponsiveContainer></div>:<Empty text="No cash or costs recorded for these filters."/>}
+   {best&&(total.cashCollected||costs)?<p className="mt-3 text-xs text-gray-500">{(admin?best.net:best.cashNet)>0?'Strongest result':'Highest net result'}: <strong>{best.key}</strong> · {money(admin?best.net:best.cashNet)}</p>:null}
+   {table&&<div className="overflow-auto max-h-80 mt-4"><table className="w-full text-xs text-left"><caption className="text-left font-bold mb-2">Trend figures (UGX)</caption><thead><tr>{['Period','Collected',...(admin?['COGS']:[]),'Expenses',...(admin?['Stock gains / losses']:[]),admin?'Net profit':'Net cash',...(showInvoices?['Invoiced']:[])].map(s=><th className="p-2 border-b" key={s}>{s}</th>)}</tr></thead><tbody>{data.trend.map(r=><tr key={r.key}><th className="p-2">{r.key}</th>{[r.cash,...(admin?[r.cogs]:[]),r.expenses,...(admin?[r.adjustments]:[]),admin?r.net:r.cashNet,...(showInvoices?[r.invoiced]:[])].map((v,i)=><td key={i} className="p-2 border-b text-right whitespace-nowrap">{money(v)}</td>)}</tr>)}</tbody></table></div>}
+  </div>
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+   <div className={panel}><h3 className="text-lg font-black">Where is the money going?</h3><p className="text-sm text-gray-500 mt-1">Operating expenses ranked by amount</p>{top&&expenseTotal>0&&<p className="text-sm mt-3 text-gray-700"><strong>{top.name}</strong> accounts for <strong>{(top.value/expenseTotal*100).toFixed(1)}%</strong> of expenses.</p>}
+    {data.categories.length?<div className="space-y-4 mt-5 max-h-96 overflow-auto pr-1">{data.categories.map((r,i)=><div key={r.name}><div className="flex justify-between gap-4 text-sm"><span className="break-words">{i+1}. {r.name}</span><span className="font-bold text-right shrink-0">{money(r.value)} <span className="text-xs text-gray-500 font-normal">({expenseTotal?(r.value/expenseTotal*100).toFixed(1):0}%)</span></span></div><div className="h-2 mt-2 rounded-full bg-gray-100"><div className="h-full rounded-full bg-rose-400" style={{width:Math.max(0,r.value/maxExpense*100)+'%'}}/></div></div>)}</div>:<Empty text="No operating expenses in this selection."/>}</div>
+   <div className={panel}><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-lg font-black">What is selling?</h3><p className="text-sm text-gray-500 mt-1">Top 5 items · {itemMetric==='value'?'share of invoiced sales':'recorded quantity'}</p></div><div className="flex gap-1">{(['value','quantity'] as const).map(m=><ActionButton key={m} className={toggle(itemMetric===m)} aria-pressed={itemMetric===m} onClick={()=>setItemMetric(m)}>{m==='value'?'Value':'Quantity'}</ActionButton>)}</div></div>
+    {topItems.length?<div className="space-y-5 mt-5">{topItems.map((r,i)=><div key={r.name}><p className="text-sm font-semibold break-words">{i+1}. {r.name}</p><div className="flex justify-between gap-2 text-xs mt-1"><span className="text-gray-500">{r.quantity.toLocaleString()} units recorded</span><strong>{money(r.value)}</strong></div><div className="h-2 mt-2 rounded-full bg-gray-100"><div className="h-full rounded-full bg-blue-500" style={{width:Math.max(0,r[itemMetric]/maxItem*100)+'%'}}/></div></div>)}</div>:<Empty text="No invoiced items in this selection."/>}</div>
+  </div>
+  <div className={panel}><h3 className="text-lg font-black">{admin?'Which departments cover their costs?':'Collections by department'}</h3><p className="text-sm text-gray-500 mt-1">{admin?'Collections, costs and net results':'Cash collected compared with operating expenses'}</p>
+   {data.departments.length?<><div style={{height:Math.max(170,data.departments.length*66)}} className="mt-5"><ResponsiveContainer width="100%" height="100%"><BarChart accessibilityLayer layout="vertical" data={data.departments} margin={{right:20,left:0}}><CartesianGrid horizontal={false} strokeDasharray="3 3"/><XAxis type="number" tickFormatter={compact} tick={{fontSize:11}}/><YAxis type="category" dataKey="name" width={110} tick={{fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={tip} formatter={(v:number)=>money(v)}/><Legend wrapperStyle={{fontSize:12}}/><Bar dataKey="cash" name="Cash collected" fill="#2563eb" radius={[0,4,4,0]} maxBarSize={16}/><Bar dataKey={admin?'costs':'expenses'} name={admin?'Total costs':'Operating expenses'} fill="#fb7185" radius={[0,4,4,0]} maxBarSize={16}/></BarChart></ResponsiveContainer></div>
+   {admin&&<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">{data.departments.map(d=><div key={d.name} className="rounded-xl border border-gray-100 p-3 flex justify-between gap-2 text-xs"><span>{d.name}<span className="block text-gray-400 mt-1">Net profit / loss</span></span><strong className={d.net<0?'text-rose-700':'text-emerald-700'}>{money(d.net)}</strong></div>)}</div>}</>:<Empty text="No department activity for these filters."/>}
+  </div>
+ </section>;
+}

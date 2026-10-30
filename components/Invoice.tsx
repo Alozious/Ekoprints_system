@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 
 import React from 'react';
 import { invoiceItems } from '../kuyiriba';
@@ -732,20 +733,20 @@ ${sale.rules && sale.rules.length > 0 ? `<div class="dash"></div><div style="fon
           {settings.businessName} Management System
         </p>
         <div className="flex gap-3">
-          <button
+          <ActionButton
             onClick={handleThermal}
             className="flex items-center bg-gray-100 text-gray-900 px-4 py-2.5 rounded-xl shadow-sm hover:bg-gray-200 transition-all font-black uppercase text-[10px] tracking-widest border border-gray-200"
           >
             <PrintIcon className="w-3.5 h-3.5 mr-2" />
             Receipt (Thermal)
-          </button>
-          <button
+          </ActionButton>
+          <ActionButton
             onClick={handlePrintA4}
             className="flex items-center bg-gray-900 text-yellow-400 px-6 py-2.5 rounded-xl shadow-xl hover:bg-black transition-all transform hover:-translate-y-0.5 font-black uppercase text-[10px] tracking-widest"
           >
             <PrintIcon className="w-4 h-4 mr-2" />
             Export to PDF
-          </button>
+          </ActionButton>
         </div>
       </div>
     </Modal>

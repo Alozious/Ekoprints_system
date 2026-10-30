@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -106,7 +107,7 @@ const SearchableCustomerSelect: React.FC<{
 
     return (
         <div className="relative" ref={wrapperRef}>
-            <button
+            <ActionButton
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center justify-between w-full p-4 border border-gray-200 rounded-2xl bg-white text-black font-bold focus:ring-2 focus:ring-yellow-400 outline-none transition-all shadow-sm"
@@ -115,7 +116,7 @@ const SearchableCustomerSelect: React.FC<{
                     {selectedCustomer ? selectedCustomer.name : "Assign to Customer..."}
                 </span>
                 <ChevronDownIcon className="w-6 h-6 text-gray-400" />
-            </button>
+            </ActionButton>
 
             {isOpen && (
                 <div className="absolute z-[100] w-full mt-2 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
@@ -163,13 +164,13 @@ const SearchableCustomerSelect: React.FC<{
                                         <input type="text" placeholder="e.g. Masaka City" value={quickAddress} onChange={e => setQuickAddress(e.target.value)} className={inputStyle} />
                                     </div>
                                 </div>
-                                <button
+                                <ActionButton
                                     onClick={handleCreateNew}
                                     disabled={isCreating}
                                     className="w-full bg-yellow-400 text-gray-900 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-xl active:scale-95 border border-yellow-500/10"
                                 >
                                     {isCreating ? 'Authenticating...' : `Enroll "${search}" as New`}
-                                </button>
+                                </ActionButton>
                             </li>
                         ) : (
                             <li className="px-6 py-12 text-center text-xs text-gray-300 font-black uppercase tracking-[0.3em]">No results found</li>
@@ -214,7 +215,7 @@ const SearchableMaterialSelect: React.FC<{
 
     return (
         <div className="relative" ref={wrapperRef}>
-            <button
+            <ActionButton
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center justify-between w-full px-4 py-3 text-sm text-left bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-yellow-400 text-black font-bold"
@@ -223,7 +224,7 @@ const SearchableMaterialSelect: React.FC<{
                     {selectedItem ? `${selectedItem.width}m | ${selectedItem.itemName}` : "Select Source Roll..."}
                 </span>
                 <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-            </button>
+            </ActionButton>
 
             {isOpen && (
                 <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
@@ -847,20 +848,20 @@ const SalesView: React.FC<SalesViewProps> = ({
 
                     {/* View Switcher */}
                     <div className="flex bg-gray-100 p-1 rounded-2xl shrink-0">
-                        <button
+                        <ActionButton
                             type="button"
                             onClick={() => setActiveViewTab('sales')}
                             className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${activeViewTab === 'sales' ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Orders Log
-                        </button>
-                        <button
+                        </ActionButton>
+                        <ActionButton
                             type="button"
                             onClick={() => setActiveViewTab('quotations')}
                             className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${activeViewTab === 'quotations' ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Quotations Log
-                        </button>
+                        </ActionButton>
                     </div>
                     <div className="w-px h-5 bg-gray-200 shrink-0 hidden lg:block" />
 
@@ -939,12 +940,12 @@ const SalesView: React.FC<SalesViewProps> = ({
                     )}
 
                     {/* New Transaction button */}
-                    <button
+                    <ActionButton
                         onClick={() => setIsAddSaleOpen(true)}
                         className="shrink-0 bg-yellow-500 text-[#1A2232] px-5 py-2 rounded-xl font-black flex items-center shadow-md hover:bg-yellow-600 transition-all active:scale-95 uppercase tracking-widest text-[10px] border border-yellow-600/10 whitespace-nowrap"
                     >
                         <PlusIcon className="w-4 h-4 mr-1.5" /> New Transaction
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
 
@@ -1007,38 +1008,38 @@ const SalesView: React.FC<SalesViewProps> = ({
                                         </td>
                                         <td className="px-4 py-2">
                                             <div className="flex items-center justify-start gap-1">
-                                                <button onClick={() => handleViewInvoice(sale)} title="View Invoice"
+                                                <ActionButton onClick={() => handleViewInvoice(sale)} title="View Invoice"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
                                                     <DocumentTextIcon className="w-3.5 h-3.5" />
-                                                </button>
+                                                </ActionButton>
                                                 {!sale.internalComplementary && <>{currentUser.role === 'admin' ? (
-                                                    <button onClick={() => handleOpenEditDocument(sale, 'sale')} title="Edit Invoice"
+                                                    <ActionButton onClick={() => handleOpenEditDocument(sale, 'sale')} title="Edit Invoice"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                         <EditIcon className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    </ActionButton>
                                                 ) : (
-                                                    <button onClick={() => handleOpenNarration(sale)} title="Notes"
+                                                    <ActionButton onClick={() => handleOpenNarration(sale)} title="Notes"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-violet-50 text-violet-500 hover:bg-violet-100 transition-all active:scale-90">
                                                         <EditIcon className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                                 {sale.status !== 'Paid' && (
-                                                    <button onClick={() => handleOpenPayment(sale)} title="Receive Payment"
+                                                    <ActionButton onClick={() => handleOpenPayment(sale)} title="Receive Payment"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
                                                         <BanknotesIcon className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                                 {isLoggable(sale) && (
-                                                    <button onClick={() => handleOpenUsageModal(sale)} title="Log Usage"
+                                                    <ActionButton onClick={() => handleOpenUsageModal(sale)} title="Log Usage"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 animate-blink active:scale-90">
                                                         <BeakerIcon className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                                 {currentUser.role === 'admin' && (
-                                                    <button onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} title="Delete"
+                                                    <ActionButton onClick={() => { setSaleToDelete(sale); setIsConfirmDeleteOpen(true); }} title="Delete"
                                                         className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                                         <TrashIcon className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                                 </>}
                                             </div>
@@ -1108,26 +1109,26 @@ const SalesView: React.FC<SalesViewProps> = ({
                                         </td>
                                         <td className="px-4 py-2">
                                             <div className="flex items-center justify-start gap-1">
-                                                <button onClick={() => handleViewQuotation(quote)} title="View/Print Quotation"
+                                                <ActionButton onClick={() => handleViewQuotation(quote)} title="View/Print Quotation"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all active:scale-90">
                                                     <DocumentTextIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => handleOpenEditDocument(quote, 'quotation')} title="Edit Quotation"
+                                                </ActionButton>
+                                                <ActionButton onClick={() => handleOpenEditDocument(quote, 'quotation')} title="Edit Quotation"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-50 text-amber-500 hover:bg-amber-100 transition-all active:scale-90">
                                                     <EditIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => handleDuplicateQuotation(quote)} title="Duplicate Quotation"
+                                                </ActionButton>
+                                                <ActionButton onClick={() => handleDuplicateQuotation(quote)} title="Duplicate Quotation"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all active:scale-90">
                                                     <CopyIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => handleConvertQuoteToSale(quote)} title="Convert to Order Invoice"
+                                                </ActionButton>
+                                                <ActionButton onClick={() => handleConvertQuoteToSale(quote)} title="Convert to Order Invoice"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-500 hover:bg-emerald-100 transition-all active:scale-90">
                                                     <BanknotesIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => { setQuoteToDelete(quote.id); setIsConfirmDeleteQuoteOpen(true); }} title="Delete Quotation"
+                                                </ActionButton>
+                                                <ActionButton onClick={() => { setQuoteToDelete(quote.id); setIsConfirmDeleteQuoteOpen(true); }} title="Delete Quotation"
                                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-90">
                                                     <TrashIcon className="w-3.5 h-3.5" />
-                                                </button>
+                                                </ActionButton>
                                             </div>
                                         </td>
                                     </tr>
@@ -1154,13 +1155,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1.5">
-                                <button
+                                <ActionButton
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
                                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm"
                                 >
                                     ‹
-                                </button>
+                                </ActionButton>
                                 {(() => {
                                     const pages: number[] = [];
                                     const maxVisible = 5;
@@ -1169,22 +1170,22 @@ const SalesView: React.FC<SalesViewProps> = ({
                                     if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
                                     for (let i = start; i <= end; i++) pages.push(i);
                                     return pages.map(page => (
-                                        <button
+                                        <ActionButton
                                             key={page}
                                             onClick={() => setCurrentPage(page)}
                                             className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#1A2232] text-yellow-400 shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
                                         >
                                             {page}
-                                        </button>
+                                        </ActionButton>
                                     ));
                                 })()}
-                                <button
+                                <ActionButton
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
                                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-black text-sm"
                                 >
                                     ›
-                                </button>
+                                </ActionButton>
                             </div>
                         )}
                     </div>
@@ -1202,13 +1203,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                                 <p className="text-xs font-bold text-orange-600">Modifying {editingDocType === 'sale' ? 'Invoice' : 'Quotation'}: <strong className="text-gray-900">#{docToEdit?.id.substring(0, 8).toUpperCase()}</strong></p>
                             </div>
                         </div>
-                        <button
+                        <ActionButton
                             type="button"
                             onClick={handleAddNewItemToEdit}
                             className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all active:scale-95"
                         >
                             <PlusIcon className="w-3.5 h-3.5" /> Add Line Item
-                        </button>
+                        </ActionButton>
                     </div>
 
                     <div>
@@ -1240,26 +1241,26 @@ const SalesView: React.FC<SalesViewProps> = ({
                                                 placeholder="Item Description"
                                                 className="flex-1 p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-amber-400 outline-none"
                                             />
-                                            <button
+                                            <ActionButton
                                                 type="button"
                                                 onClick={() => handleRemoveItemInEdit(idx)}
                                                 className="p-2.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-95 flex-shrink-0"
                                                 title="Remove Item"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
-                                            </button>
+                                            </ActionButton>
                                         </div>
 
                                         {/* Row 2: Mini Calc + Qty + Unit Cost + Total */}
                                         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-200/60">
                                             <div className="flex items-center gap-2">
-                                                <button
+                                                <ActionButton
                                                     type="button"
                                                     onClick={() => handleOpenMiniCalc(idx)}
                                                     className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-[10px] uppercase tracking-wider rounded-xl border border-purple-200 flex items-center gap-1 transition-all active:scale-95"
                                                 >
                                                     📐 Mini Calc
-                                                </button>
+                                                </ActionButton>
                                                 {item.metadata?.type && (
                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                                                         ({item.metadata.type})
@@ -1336,12 +1337,12 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </div>
                     </div>
 
-                    <button
+                    <ActionButton
                         onClick={handleSaveInvoiceEdit}
                         className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-black active:scale-95 transition-all border border-yellow-400/20"
                     >
                         Update {editingDocType === 'sale' ? 'Invoice' : 'Quotation'} Record
-                    </button>
+                    </ActionButton>
                 </div>
             </Modal>
 
@@ -1430,7 +1431,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Standard Paper Size Presets</span>
                             <div className="flex flex-wrap gap-1.5">
                                 {Object.keys(PAPER_SIZES).map(sizeKey => (
-                                    <button
+                                    <ActionButton
                                         key={sizeKey}
                                         type="button"
                                         onClick={() => {
@@ -1445,7 +1446,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                                         className="px-2.5 py-1 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-800 rounded-lg text-xs font-black transition-all"
                                     >
                                         {sizeKey}
-                                    </button>
+                                    </ActionButton>
                                 ))}
                             </div>
                         </div>
@@ -1533,20 +1534,20 @@ const SalesView: React.FC<SalesViewProps> = ({
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                        <button
+                        <ActionButton
                             type="button"
                             onClick={() => setIsMiniCalcOpen(false)}
                             className="flex-1 bg-gray-100 text-gray-600 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-gray-200 transition-all"
                         >
                             Cancel
-                        </button>
-                        <button
+                        </ActionButton>
+                        <ActionButton
                             type="button"
                             onClick={handleApplyMiniCalc}
                             className="flex-1 bg-purple-700 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-purple-800 transition-all shadow-xl active:scale-95"
                         >
                             Apply Mini Calc
-                        </button>
+                        </ActionButton>
                     </div>
                 </div>
             </Modal>
@@ -1574,12 +1575,12 @@ const SalesView: React.FC<SalesViewProps> = ({
                             placeholder="Document specific client requests, production steps, or machine settings here..."
                         />
                     </div>
-                    <button
+                    <ActionButton
                         onClick={handleSaveNarration}
                         className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl active:scale-95 transition-transform border border-yellow-400/10"
                     >
                         Update Production Log
-                    </button>
+                    </ActionButton>
                 </div>
             </Modal>
 
@@ -1628,12 +1629,12 @@ const SalesView: React.FC<SalesViewProps> = ({
                             </tbody>
                         </table>
                     </div>
-                    <button
+                    <ActionButton
                         onClick={handleSaveUsage}
                         className="w-full bg-[#1A2232] text-yellow-400 py-5 rounded-[1.8rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl active:scale-95 border border-yellow-400/10"
                     >
                         Sync Stock & Deduct Materials
-                    </button>
+                    </ActionButton>
                 </div>
             </Modal>
 
@@ -1712,13 +1713,13 @@ const SalesView: React.FC<SalesViewProps> = ({
                         </div>
                     )}
 
-                    <button
+                    <ActionButton
                         onClick={isQuotationMode ? handleCreateQuotation : handleCreateSale}
                         disabled={!customerId || (convertingQuote ? convertingQuote.items : quoteForSale).length === 0}
                         className="w-full bg-[#1A2232] text-yellow-400 py-6 rounded-[2rem] font-black uppercase tracking-[0.25em] text-xs shadow-2xl active:scale-95 disabled:opacity-30 disabled:grayscale transition-all"
                     >
                         {isQuotationMode ? 'Authenticate & Save Quotation' : 'Authenticate & Generate Invoice'}
-                    </button>
+                    </ActionButton>
                 </div>
             </Modal>
 
@@ -1759,12 +1760,12 @@ const SalesView: React.FC<SalesViewProps> = ({
                                 />
                             </div>
 
-                            <button
+                            <ActionButton
                                 onClick={handleRecordPayment}
                                 className="w-full bg-green-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl active:scale-95 disabled:opacity-50 transition-all"
                             >
                                 Confirm Debt Clearance
-                            </button>
+                            </ActionButton>
                         </>
                     )}
                 </div>

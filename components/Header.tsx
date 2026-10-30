@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import InfoTooltip from './InfoTooltip';
 
 import React, { useState } from 'react';
@@ -19,9 +20,9 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMen
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-full">
                 <div className="flex items-center justify-between h-full">
                     <div className="flex items-center">
-                        <button className="md:hidden mr-4 text-gray-600 hover:text-gray-900 transition-colors" onClick={onMenuClick}>
+                        <ActionButton className="md:hidden mr-4 text-gray-600 hover:text-gray-900 transition-colors" onClick={onMenuClick}>
                             <MenuIcon className="w-6 h-6" />
-                        </button>
+                        </ActionButton>
                         <h1 className="text-xl font-semibold text-gray-800 hidden md:block">
                             Welcome To Eko Prints Management System
                         </h1>
@@ -31,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMen
                     </div>
                     
                     <div className="flex items-center space-x-4">
-<InfoTooltip label={`${pageTitle} information`}><p className="font-bold">{pageTitle}</p><p>Use page filters to choose dates and departments. Info icons beside headings contain guidance and calculations.</p>{/inventory/i.test(pageTitle) && <p>Materials show unopened units only. Receive stock adds units; starting a unit removes it from stock. Unopened materials can be resold.</p>}{/report|dashboard/i.test(pageTitle) && currentUser.role === 'admin' && <p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock adjustments. COGS includes started materials and resale costs. Stock losses reduce profit; gains add. Opening stock and purchases are not COGS.</p>}</InfoTooltip>
+<InfoTooltip label={`${pageTitle} information`}><p className="font-bold">{pageTitle}</p><p>Use page filters to choose dates and departments. Info icons beside headings contain guidance and calculations.</p>{/inventory/i.test(pageTitle) && <p>Materials show unopened units only. Receive stock adds units; starting a unit removes it from stock. Unopened materials can be resold.</p>}{/report|dashboard/i.test(pageTitle) && currentUser.role === 'admin' && <p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock gains / losses. COGS includes started materials and resale costs. Stock losses reduce profit; gains add. Opening stock and purchases are not COGS.</p>}</InfoTooltip>
                          <div className="relative hidden md:block">
                             <input
                                 type="text"
@@ -43,13 +44,13 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMen
                             </div>
                         </div>
 
-                        <button className="relative text-gray-600 hover:text-gray-800">
+                        <ActionButton className="relative text-gray-600 hover:text-gray-800">
                             <BellIcon className="w-6 h-6" />
                             <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                        </button>
+                        </ActionButton>
 
                         <div className="relative">
-                            <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center space-x-2">
+                            <ActionButton onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center space-x-2">
                                 <img
                                     className="h-9 w-9 rounded-full object-cover"
                                     src={`https://ui-avatars.com/api/?name=${currentUser.username.replace(' ', '+')}&background=FBBF24&color=fff`}
@@ -60,19 +61,19 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, currentUser, onLogout, onMen
                                     <div className="text-xs text-gray-500 capitalize">{currentUser.role}</div>
                                 </div>
                                 <ChevronDownIcon className="w-4 h-4 text-gray-500 hidden md:block" />
-                            </button>
+                            </ActionButton>
                             {isDropdownOpen && (
                                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
                                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</a>
                                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
                                     <div className="border-t border-gray-100 my-1"></div>
-                                    <button
+                                    <ActionButton
                                         onClick={onLogout}
                                         className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
                                     >
                                         <LogoutIcon className="w-5 h-5 mr-2" />
                                         Logout
-                                    </button>
+                                    </ActionButton>
                                 </div>
                             )}
                         </div>

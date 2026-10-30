@@ -1,10 +1,14 @@
-import { statementHtml } from '../statementExport';
+import {addStatementPrintControls} from '../statementPrinting';
+import {paginateStatement} from '../statementPagination';
+import DashboardCharts from './DashboardCharts';
+import {useToast} from '../App';
+import ActionButton from './ActionButton';
+import { generateStatement } from '../statementGeneration';
 import type { StatementOptions } from '../statementExport';
 import Modal from './Modal';
 import InfoTooltip from './InfoTooltip';
 
 import React, { useState, useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line, Sector } from 'recharts';
 import { Sale, Expense, InventoryItem, StockItem, User, MaterialCategory, Customer, BankingRecord, SystemSettings, StockTransaction } from '../types';
 import { allocatedSale, businessDay, inPeriod, inventoryValuation, moduleShare, profitSummary, saleDepartment } from '../reportAccounting';
 import { department } from '../stockMath';
@@ -41,6 +45,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
     const [period, setPeriod] = useState<ReportPeriod>('today');
     const [showBankingModal, setShowBankingModal] = useState(false);
     const [showStatementModal, setShowStatementModal] = useState(false);
+    const [generatingStatement,setGeneratingStatement]=useState(false);
+    const [statementError,setStatementError]=useState('');
+    const {addToast}=useToast();
     const [statementPeriod, setStatementPeriod] = useState<ReportPeriod>('today');
     const [statementStart, setStatementStart] = useState(businessDay(new Date()));
     const [statementEnd, setStatementEnd] = useState(businessDay(new Date()));
@@ -128,10 +135,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
         return { safeYesterday, cashToday, expensesToday, bankedToday, currentSafe };
     }, [sales, expenses, bankingRecords]);
 
-    const handleBankingSubmit = () => {
+    const handleBankingSubmit = async () => {
         const amount = parseFloat(bankingAmount);
         if (isNaN(amount) || amount <= 0) return;
-        if (onAddBankingRecord) onAddBankingRecord(amount);
+        if (onAddBankingRecord) await onAddBankingRecord(amount);
         setBankingAmount('');
         setShowBankingModal(false);
     };
@@ -161,85 +168,6 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
         ] : [{ label: 'Net cash flow', value: netCashFlow, tone: 'text-blue-600' }]),
     ];
 
-    const topSellingItems = useMemo(() => {
-        const itemSales: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
-        filteredData.sales.forEach(sale => {
-            sale.items.forEach(item => {
-                if (!itemSales[item.name]) {
-                    itemSales[item.name] = { name: item.name, quantity: 0, revenue: 0 };
-                }
-                itemSales[item.name].quantity += item.quantity;
-                itemSales[item.name].revenue += item.quantity * item.price;
-            });
-        });
-        return Object.values(itemSales).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-    }, [filteredData.sales]);
-
-    const expenseByCategory = useMemo(() => {
-        const categoryTotals: { [key: string]: number } = {};
-        filteredData.expenses.forEach(expense => {
-            if (!categoryTotals[expense.category]) categoryTotals[expense.category] = 0;
-            categoryTotals[expense.category] += expense.amount;
-        });
-        return Object.entries(categoryTotals).map(([name, value]) => ({ name, value }));
-    }, [filteredData.expenses]);
-
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
-
-    const [activePieIndex, setActivePieIndex] = useState(-1);
-    const [trendChartType, setTrendChartType] = useState<'area' | 'bar' | 'line'>('area');
-
-    const salesTrendData = useMemo(() => {
-        type Entry = { date: string; sortKey: number; revenue: number; expenses: number };
-        const map: Record<string, Entry> = {};
-        const useMonthly = period === 'year' || period === 'all';
-
-        const getKey = (d: Date): [string, number] => {
-            if (useMonthly) {
-                return [
-                    d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-                    d.getFullYear() * 100 + d.getMonth()
-                ];
-            }
-            return [
-                d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate()
-            ];
-        };
-
-        filteredData.sales.forEach(sale => {
-            const [label, sortKey] = getKey(new Date(sale.date));
-            if (!map[label]) map[label] = { date: label, sortKey, revenue: 0, expenses: 0 };
-            map[label].revenue += sale.total;
-        });
-
-        filteredData.expenses.forEach(exp => {
-            const [label, sortKey] = getKey(new Date(exp.date));
-            if (!map[label]) map[label] = { date: label, sortKey, revenue: 0, expenses: 0 };
-            map[label].expenses += exp.amount;
-        });
-
-        return Object.values(map)
-            .sort((a, b) => a.sortKey - b.sortKey)
-            .map(({ date, revenue, expenses }) => ({ date, revenue, expenses }));
-    }, [filteredData, period]);
-
-    const renderActiveShape = (props: any) => {
-        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value } = props;
-        return (
-            <g>
-                <text x={cx} y={cy - 8} textAnchor="middle" fill="#1a2232" fontSize={11} fontWeight={900} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-                    {payload.name}
-                </text>
-                <text x={cx} y={cy + 10} textAnchor="middle" fill="#3b82f6" fontSize={12} fontWeight={900}>
-                    {formatUGX(value)}
-                </text>
-                <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={outerRadius + 10} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-                <Sector cx={cx} cy={cy} innerRadius={outerRadius + 14} outerRadius={outerRadius + 17} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-            </g>
-        );
-    };
-
     const getPeriodLabel = () => {
         if (period === 'today') return 'Today';
         if (period === 'yesterday') return 'Yesterday';
@@ -266,21 +194,38 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
 
     const periodsToDisplay: ReportPeriod[] = isBankerOnly ? ['today', 'yesterday'] : ['today', 'month', 'year', 'all', 'custom'];
 
-    const handleGenerateStatement = () => {
+    const handleGenerateStatement = async () => {
+        if(generatingStatement)return;
         if (statementPeriod === 'custom' && (!statementStart || !statementEnd || statementStart > statementEnd)) return;
-        const html = statementHtml({ sales, expenses, stockTransactions, inventory, stockItems, customers, bankingRecords,
+        setStatementError('');
+        const win=window.open('', '_blank', 'width=1100,height=850');
+        if(!win){setStatementError('The statement window was blocked. Allow pop-ups for this system and try again.');return;}
+        win.document.write('<!doctype html><html><head><title>Generating statement</title></head><body style="font:16px Arial;padding:40px"><p role="status">Generating your statement. Larger timeframes may take longer. Please keep this window open.</p></body></html>');win.document.close();
+        setGeneratingStatement(true);
+        try{
+        const html = await generateStatement({ sales, expenses, stockTransactions, inventory, stockItems, customers, bankingRecords,
             filter: { period:statementPeriod,dateMode:'range',start:statementStart,end:statementEnd }, module: activeModule, admin: currentUser.role === 'admin', options:statementOptions,
             businessName: settings.businessName, header: settings.statementHeader, footer: settings.statementFooter,
             userName: currentUser.username, periodLabel: statementPeriod === 'custom' ? `${statementStart} to ${statementEnd}` : ({today:'Today',month:'This month',year:'This year',all:'All time',yesterday:'Yesterday'}[statementPeriod] || statementPeriod) });
 
-        const win = window.open('', '_blank', 'width=900,height=900');
-        if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); setShowStatementModal(false); }
+        if(win.closed)throw new Error('The statement window was closed. Please generate it again.');
+        win.document.open();win.document.write(html);win.document.close();
+        await win.document.fonts.ready;
+        await paginateStatement(win.document);
+        await new Promise(resolve=>setTimeout(resolve,250));
+        addStatementPrintControls(win.document);
+        win.focus();setShowStatementModal(false);addToast('Statement ready. Use Print or Download printable PDF in the statement window.','success');
+        }catch(error){
+            if(!win.closed)win.close();
+            setStatementError(error instanceof Error?error.message:'Unable to generate the statement. Please try again.');
+        }finally{setGeneratingStatement(false);}
+
     };
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
-            <Modal isOpen={showStatementModal} onClose={()=>setShowStatementModal(false)} title="Statement options" size="lg">
-                <div className="space-y-6">
+            <Modal isOpen={showStatementModal} onClose={()=>{if(!generatingStatement)setShowStatementModal(false);}} title="Statement options" size="lg">
+                <fieldset disabled={generatingStatement} className="space-y-6 min-w-0">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <label className="text-sm font-bold">Arrange transactions
                             <select className="block w-full border rounded-xl p-3 mt-2" value={statementOptions.grouping} onChange={e=>setStatementOptions({...statementOptions,grouping:e.target.value as StatementOptions['grouping']})}>
@@ -304,13 +249,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                     ]).map(section=><fieldset key={section.key} className="border rounded-2xl p-4" disabled={section.key==='cashFlow'&&activeModule!=='all'}>
                         <legend className="px-2 text-sm font-black">{section.title}</legend>
                         {section.key==='cashFlow'&&activeModule!=='all'&&<p className="text-sm text-gray-500 mb-3">Select All departments to include business-wide cash-flow balances.</p>}
-                        <div className="flex gap-4 mb-3 text-xs font-bold"><button type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:section.choices})}>Select all</button><button type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:[]})}>Clear</button></div>
+                        <div className="flex gap-4 mb-3 text-xs font-bold"><ActionButton type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:section.choices})}>Select all</ActionButton><ActionButton type="button" onClick={()=>setStatementOptions({...statementOptions,[section.key]:[]})}>Clear</ActionButton></div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{section.choices.map(choice=><label key={choice} className="flex gap-2 items-center text-sm"><input type="checkbox" checked={statementOptions[section.key].includes(choice)} onChange={e=>setStatementOptions({...statementOptions,[section.key]:e.target.checked?[...statementOptions[section.key],choice]:statementOptions[section.key].filter(v=>v!==choice)})}/>{choice}</label>)}</div>
                     </fieldset>)}
                     <p className="text-xs text-gray-500">Selected fields become table columns. Each day, month or year has one summary row, followed by its selected transaction particulars. Choosing no particulars creates a summary-only table. Statements print on A4 landscape. Cash-flow balances use the whole business.</p>
                     {statementPeriod==='custom'&&(!statementStart||!statementEnd||statementStart>statementEnd)&&<p role="alert" className="text-red-600 text-sm">Choose a valid start and end date.</p>}
-                    <button className="w-full bg-gray-900 text-yellow-400 font-black rounded-xl p-3 disabled:opacity-40" disabled={statementPeriod==='custom'&&(!statementStart||!statementEnd||statementStart>statementEnd)} onClick={handleGenerateStatement}>Generate statement</button>
-                </div>
+                    <ActionButton loadingLabel="Generating statement..." aria-busy={generatingStatement} className="w-full bg-gray-900 text-yellow-400 font-black rounded-xl p-3 disabled:opacity-40" disabled={generatingStatement||statementPeriod==='custom'&&(!statementStart||!statementEnd||statementStart>statementEnd)} onClick={handleGenerateStatement}>{generatingStatement?<span role="status" className="inline-flex items-center gap-2"><span className="inline-block h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true"/>Generating statement...</span>:'Generate statement'}</ActionButton>
+                    {statementError&&<p role="alert" className="text-red-600 text-sm">{statementError}</p>}
+                </fieldset>
             </Modal>
 
             {/* 1. Merged header bar */}
@@ -318,16 +264,16 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                 <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">
                     Dashboard: <span className="text-yellow-500">{getPeriodLabel()}</span>
                 </span>
-                <InfoTooltip label="Report calculations and information"><p>The financial cards follow the selected dates and department. Cash collected follows payment dates. Outstanding debts are the current unpaid balances of invoices issued in the selected dates and department; overpayments on other invoices do not reduce these debts. The cash safe banner shows today's cash across the entire business.</p>{currentUser.role === 'admin' && <><p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock adjustments. COGS includes started materials and resale costs. Purchases and opening balances are excluded. Stock losses reduce profit; gains add.</p><p>Inventory closing date: {valuation.closingDay}.</p>{financials.missingCogs > 0 && <p>{financials.missingCogs} historical sale lines lack COGS; profit is provisional.</p>}{valuation.missingItems > 0 && <p>{valuation.missingItems} stock records lack usable cost/opening history and are excluded from valuation.</p>}</>}</InfoTooltip><div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
+                <InfoTooltip label="Report calculations and information"><p>The financial cards follow the selected dates and department. Cash collected follows payment dates. Outstanding debts are the current unpaid balances of invoices issued in the selected dates and department; overpayments on other invoices do not reduce these debts. The cash safe banner shows today's cash across the entire business.</p>{currentUser.role === 'admin' && <><p>Gross profit = cash collected minus COGS. Net profit = gross profit minus operating expenses minus net stock gains / losses. COGS includes started materials and resale costs. Purchases and opening balances are excluded. Stock losses reduce profit; gains add.</p><p>Inventory closing date: {valuation.closingDay}.</p>{financials.missingCogs > 0 && <p>{financials.missingCogs} historical sale lines lack COGS; profit is provisional.</p>}{valuation.missingItems > 0 && <p>{valuation.missingItems} stock records lack usable cost/opening history and are excluded from valuation.</p>}</>}</InfoTooltip><div className="w-px h-5 bg-gray-200 mx-1 hidden sm:block" />
 
                 {/* Period pills */}
                 <div className="flex bg-gray-100 p-0.5 rounded-xl overflow-x-auto scrollbar-hide gap-0.5">
                     {periodsToDisplay.map(p => (
-                        <button key={p} onClick={() => setPeriod(p)}
+                        <ActionButton key={p} onClick={() => setPeriod(p)}
                             className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center whitespace-nowrap flex-shrink-0 ${period === p ? 'bg-white text-blue-600 shadow' : 'text-gray-400 hover:text-gray-700'}`}>
                             {p === 'custom' && <CalendarIcon className="w-3 h-3 mr-1" />}
                             {p === 'today' ? 'Today' : p === 'yesterday' ? 'Yesterday' : p === 'all' ? 'All Time' : p === 'year' ? 'This Year' : p === 'month' ? 'This Month' : 'Custom'}
-                        </button>
+                        </ActionButton>
                     ))}
                 </div>
 
@@ -356,17 +302,17 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                 {/* Module pills */}
                 <div className="flex gap-1 overflow-x-auto scrollbar-hide">
                     {(['all', 'large-format', 'dtf', 'embroidery', 'bizhub', 'supplies', 'products', 'Unassigned'] as ModuleFilter[]).map(mod => (
-                        <button key={mod} onClick={() => setActiveModule(mod)}
+                        <ActionButton key={mod} onClick={() => setActiveModule(mod)}
                             className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeModule === mod ? 'bg-[#1a2232] text-yellow-400 shadow' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-700'}`}>
                             {mod === 'all' ? 'All' : mod === 'large-format' ? 'LF' : mod.toUpperCase()}
-                        </button>
+                        </ActionButton>
                     ))}
                 </div>
 
                 <div className="ml-auto">
-                    <button onClick={() => {setStatementPeriod(period);setStatementStart(customDateStart);setStatementEnd(customDateEnd);setShowStatementModal(true);}} className="flex items-center bg-[#1A2232] text-yellow-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap border border-yellow-400/20">
+                    <ActionButton onClick={() => {setStatementPeriod(period);setStatementStart(customDateStart);setStatementEnd(customDateEnd);setShowStatementModal(true);}} className="flex items-center bg-[#1A2232] text-yellow-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap border border-yellow-400/20">
                         <PrintIcon className="w-3.5 h-3.5 mr-1" /> Statement
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
 
@@ -399,12 +345,12 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                             </div>
                             <div className="bg-white px-4 py-3 rounded-2xl shadow-xl border-l-8 border-yellow-400 transform hover:scale-[1.02] transition-transform relative group/safe overflow-hidden">
                                 <div className="absolute top-0 right-0 p-2 opacity-0 group-hover/safe:opacity-100 transition-opacity">
-                                    <button
+                                    <ActionButton
                                         onClick={() => setShowBankingModal(true)}
                                         className="bg-gray-900 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center"
                                     >
                                         <BankIcon className="w-3 h-3 mr-1" /> Bank
-                                    </button>
+                                    </ActionButton>
                                 </div>
                                 <p className="text-gray-500 text-[9px] font-black uppercase tracking-widest mb-1">Money In Safe</p>
                                 <p className="text-xl font-black text-[#1a2232] tracking-tighter">{formatUGX(safeBalance.currentSafe)}</p>
@@ -431,146 +377,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                 </div>
             </section>
 
-            {/* 4. Sales & Expense Trend Chart */}
-            <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                    <div>
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Revenue & Expense Trend</h3>
-                        <p className="text-xs text-gray-400 font-medium mt-0.5">{getPeriodLabel()}</p>
-                    </div>
-                    <div className="flex bg-gray-100 rounded-xl p-1 gap-1 self-start sm:self-auto">
-                        {(['area', 'bar', 'line'] as const).map(type => (
-                            <button
-                                key={type}
-                                onClick={() => setTrendChartType(type)}
-                                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${trendChartType === type ? 'bg-white shadow text-blue-600' : 'text-gray-400 hover:text-gray-700'}`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                {salesTrendData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                        {trendChartType === 'area' ? (
-                            <AreaChart data={salesTrendData}>
-                                <defs>
-                                    <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gradExpenses" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
-                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
-                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
-                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
-                                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={3} fill="url(#gradRevenue)" dot={false} activeDot={{ r: 6 }} />
-                                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#ef4444" strokeWidth={2} fill="url(#gradExpenses)" dot={false} activeDot={{ r: 5 }} />
-                            </AreaChart>
-                        ) : trendChartType === 'bar' ? (
-                            <BarChart data={salesTrendData} barGap={2}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
-                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
-                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
-                                <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={32} />
-                                <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[6, 6, 0, 0]} maxBarSize={32} />
-                            </BarChart>
-                        ) : (
-                            <LineChart data={salesTrendData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} tick={{ dy: 8 }} />
-                                <YAxis tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} stroke="#94a3b8" fontSize={9} fontWeight={700} axisLine={false} tickLine={false} />
-                                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 700, fontSize: 11 }} formatter={(v: number) => formatUGX(v)} />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900, paddingTop: 16 }} />
-                                <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={3} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 7 }} />
-                                <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} strokeDasharray="5 3" />
-                            </LineChart>
-                        )}
-                    </ResponsiveContainer>
-                ) : (
-                    <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No data for selected period.</div>
-                )}
-            </div>
-
-            {/* 5. Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                <div className="lg:col-span-3 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Expenses by Category</h3>
-                    <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-6">Hover a slice for details</p>
-                    {expenseByCategory.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart>
-                                <Pie
-                                    data={expenseByCategory}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={65}
-                                    outerRadius={105}
-                                    paddingAngle={4}
-                                    activeIndex={activePieIndex}
-                                    activeShape={renderActiveShape}
-                                    onMouseEnter={(_, index) => setActivePieIndex(index)}
-                                    onMouseLeave={() => setActivePieIndex(-1)}
-                                    className="outline-none"
-                                >
-                                    {expenseByCategory.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 900, fontSize: 11 }}
-                                    formatter={(value: number) => formatUGX(value)}
-                                />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 900 }} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No expense data for current filters.</div>
-                    )}
-                </div>
-
-                <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-50">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Top 5 Selling Items</h3>
-                    <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-6">By Revenue</p>
-                    {topSellingItems.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={280}>
-                            <BarChart layout="vertical" data={topSellingItems} margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    type="category"
-                                    dataKey="name"
-                                    width={110}
-                                    tick={{ fontSize: 9, fontWeight: 900, textAnchor: 'end', fill: '#6b7280' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + '…' : v}
-                                />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', fontWeight: 900, fontSize: 11 }}
-                                    formatter={(v: number, name: string) => [formatUGX(v), name === 'revenue' ? 'Revenue' : name]}
-                                    cursor={{ fill: '#f8fafc' }}
-                                />
-                                <Bar dataKey="revenue" name="Revenue" radius={[0, 8, 8, 0]} maxBarSize={28}>
-                                    {topSellingItems.map((_, index) => (
-                                        <Cell key={`bar-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="h-64 flex items-center justify-center text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">No data for current filters.</div>
-                    )}
-                </div>
-            </div>
+            <DashboardCharts sales={sales} expenses={expenses} movements={stockTransactions} filter={accountingFilter} module={activeModule} admin={currentUser.role==='admin'}/>
 
             {/* 5. Inventory Valuation Section - Refined UI */}
             <div className="bg-[#f0f4f8] p-10 rounded-[3rem] shadow-2xl border border-white/50 relative overflow-hidden">
@@ -650,19 +457,19 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales: allSales, expenses, st
                                 </div>
 
                                 <div className="flex gap-4 pt-2">
-                                    <button
+                                    <ActionButton
                                         onClick={() => { setShowBankingModal(false); setBankingAmount(''); }}
                                         className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all"
                                     >
                                         Cancel
-                                    </button>
-                                    <button
+                                    </ActionButton>
+                                    <ActionButton
                                         onClick={handleBankingSubmit}
                                         disabled={!bankingAmount || parseFloat(bankingAmount) <= 0}
                                         className="flex-[2] bg-gray-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 shadow-lg"
                                     >
                                         Confirm Deposit
-                                    </button>
+                                    </ActionButton>
                                 </div>
                             </div>
                         </div>

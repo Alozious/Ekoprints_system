@@ -1,3 +1,4 @@
+import ActionButton from './ActionButton';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -51,7 +52,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         {/* Header - Fixed Height */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0 bg-white rounded-t-3xl">
           <h2 className="text-sm font-black text-gray-800 tracking-[0.1em] uppercase">{title}</h2>
-          <button 
+          <ActionButton 
             onClick={onClose} 
             className="p-2 -mr-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
             aria-label="Close modal"
@@ -59,7 +60,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
+          </ActionButton>
         </div>
 
         {/* Content */}

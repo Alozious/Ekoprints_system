@@ -80,7 +80,7 @@ test('summary-only cash-flow fields use opening and closing balances, independen
 test('daily table includes empty days and particulars follow their own period summary',()=>{
   const html=statementHtml({...input,options:{grouping:'daily',cards:['Cash collected'],cashFlow:[],particulars:['Payments']},filter:{period:'custom',dateMode:'range',start:'2026-10-21',end:'2026-10-23'}});
   assert.equal((html.match(/class="period-summary"/g)||[]).length,3);
-  const first=html.indexOf('<th scope="row">2026-10-21</th>'),details=html.indexOf('Transaction particulars · 2026-10-21'),second=html.indexOf('<th scope="row">2026-10-22</th>');
+  const first=html.indexOf('<th scope="row">2026-10-22</th>'),details=html.indexOf('Transaction particulars · 2026-10-22'),second=html.indexOf('<th scope="row">2026-10-21</th>');
   assert.ok(first<details&&details<second);
   assert.ok(html.includes('<td class="amount">0 UGX</td>'));
 });
@@ -94,4 +94,35 @@ test('Kuyiriba direct costs are included once in statement COGS',()=>{
 test('linked internal complementary entries are excluded from external statement transactions',()=>{
 const html=statementHtml({...input,sales:[sale,{...sale,id:'internal-complementary',internalComplementary:true,total:5000}]});
 assert.ok(html.includes('invoice-1'));assert.ok(!html.includes('internal-complementary'));
+});
+
+test('full-year daily statement retains thousands of particulars and every summary day',()=>{
+ const expenses=Array.from({length:5000},(_,i)=>({id:'e'+i,date:new Date(Date.UTC(2026,0,1+i%365,10)).toISOString(),category:'Cleaning',description:'Expense-'+i,amount:5000}));
+ const html=statementHtml({...input,sales:[],expenses,filter:{period:'custom',dateMode:'range',start:'2026-01-01',end:'2026-12-31'},options:{grouping:'daily',cards:['Operating expenses'],cashFlow:[],particulars:['Expenses']}});
+ assert.equal((html.match(/class="period-summary"/g)||[]).length,365);
+ assert.equal((html.match(/Cleaning: Expense-/g)||[]).length,5000);
+ assert.ok(html.includes('2026-12-31'));
+});
+
+test('daily, monthly and yearly statements list recent summaries and particulars first',()=>{
+ const expenses=[{date:'2025-01-01T10:00:00Z',category:'Test',description:'old-entry',amount:1},{date:'2026-02-02T09:00:00Z',category:'Test',description:'morning-entry',amount:2},{date:'2026-02-02T15:00:00Z',category:'Test',description:'recent-entry',amount:3}];
+ for(const grouping of ['daily','monthly','yearly']){
+ const html=statementHtml({...input,sales:[],expenses,filter:{period:'custom',dateMode:'range',start:'2025-01-01',end:'2026-02-02'},options:{grouping,cards:['Operating expenses'],cashFlow:[],particulars:['Expenses']}});
+ const periodKeys=[...html.matchAll(/<th scope="row">([^<]+)<\/th>/g)].map(m=>m[1]);
+ assert.deepEqual(periodKeys,[...periodKeys].sort().reverse());
+ assert.ok(html.indexOf('recent-entry')<html.indexOf('morning-entry'));
+ assert.ok(html.indexOf('morning-entry')<html.indexOf('old-entry'));
+ }
+ const legacy=statementHtml({...input,sales:[],expenses});
+ assert.ok(legacy.indexOf('recent-entry')<legacy.indexOf('old-entry'));
+});
+
+test('statement opens with four printable graphs before transaction summaries',()=>{
+ const html=statementHtml({...input,options:{grouping:'monthly',cards:['Cash collected'],cashFlow:[],particulars:['Payments']}});
+ assert.equal((html.match(/<svg /g)||[]).length,4);
+ assert.ok(html.indexOf('class="chart-cover"')<html.indexOf('<table class="summary-table">'));
+ assert.ok(html.includes('break-after:page'));
+ for(const title of ['Collections against costs','Largest operating expenses','Top selling items','Department performance'])assert.ok(html.includes(title));
+ assert.ok(!/adjustment/i.test(html));
+ const staff=statementHtml({...input,admin:false});assert.ok(!staff.includes('Net profit / loss'));assert.ok(!staff.includes('COGS'));
 });
